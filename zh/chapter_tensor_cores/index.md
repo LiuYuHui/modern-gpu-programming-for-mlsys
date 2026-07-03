@@ -119,7 +119,7 @@ Accumulator layout 由 `cta_group`、M 维大小、A 是稠密矩阵还是结构
 
 `N` 由 instruction descriptor 指定。在本节讨论的 `f16`/`bf16` 路径中，`cta_group::1` 支持从 8 到 256、以 8 为步长的 `N`，`cta_group::2` 支持从 16 到 256、以 16 为步长的 `N`。下面四张图用符号 `N` 表示这些合法取值；紫色表示 SMEM operands，橙色表示 TMEM accumulator，绿色表示 Tensor Core MMA 的数据路径。
 
-### `cta_group::1`，`M = 128`
+在 `cta_group::1` 中，一个 CTA 拥有这次 MMA。它的 operand 位于该 CTA 的 SMEM 中，accumulator 写入该 CTA 的 TMEM。
 
 这是最直接的情况。一个 CTA 计算包含 128 行的 output tile，而该 CTA 的 TMEM 也恰好包含 128 个 Lane rows。因此，accumulator 的第 `m` 行直接映射到 TMEM Lane `m`，N 维则沿 TMEM columns 展开。
 
@@ -165,7 +165,7 @@ rows 48-63  -> lanes 112-127
 
 ![`cta_group::1`、`M=64`、不使用 `.ws`：四组连续的 16 行以 32 为 Lane stride；lane alignment 可以选择 0 或 16，从而为另一个 `M=64` tile 留出互补位置](../../img/mma_cg1_m64.svg)
 
-### `cta_group::2`，`M = 256`
+这是最简单的情况。一个 CTA 计算一个 128-row tile。TMEM 也有 128 个 Lane row。因此映射是直接的：accumulator 的 row `m` 映射到 Lane `m`，N 维度映射到 TMEM column。
 
 当 `M = 256` 时，一个 CTA 的 128 个 Lane rows 无法容纳完整的 M 维，因此 accumulator 被分布到 CTA pair 的两块 TMEM 中。
 

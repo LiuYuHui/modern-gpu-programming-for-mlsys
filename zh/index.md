@@ -64,7 +64,6 @@ tirx_guide/arch/index
 ```
 
 <!--
-Release chapters one by one by adding them back to the visible toctree above.
-Keep unreleased placeholder pages marked with `orphan: true`, so Sphinx builds
-without warnings while the pages stay hidden from navigation.
+后续章节翻译完成后，再逐章加入上方目录。
+未发布的占位页面会在配置中排除，避免它们出现在导航和搜索中。
 -->

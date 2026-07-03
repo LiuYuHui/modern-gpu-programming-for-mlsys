@@ -184,7 +184,7 @@ reg    = col%2
 
 ```{raw} html
 <iframe src="../demo_zh/thread_register.html" title="Thread + register layout via named axes" loading="lazy"
-        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 ```
 
 *例如，点击上图左侧 `Logical 8×8 Matrix` 中第 `r5` 行、第 `c3` 列的 cell 43，可以看到逻辑元素 `(5, 3)` 由 lane 21 持有，并位于该 lane 的 fragment slot 1。*
@@ -304,6 +304,7 @@ S[(32, …) : (1@TLane, …)] + R[4 : 32@TLane]
 <iframe src="../demo_zh/sf_tmem.html?v=tcol-subcolumn-20260710" title="Scale factors in TMEM: packing and .warpx4 broadcast" loading="lazy"
         style="width:100%; height:560px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 ```
+*交互演示：点击一个 scale factor `SFA[m, sf]`；它会被打包到 TMEM 的 lane `m mod 32`、column `(m // 32)·4 + sf`，随后沿 `TLane` 轴做 `warpx4` broadcast，扩展到四个 lane copy（`l`、`l+32`、`l+64`、`l+96`），每个 warp 的 32-lane window 各一份。*
 
 *点击任意 SFA cell，可以查看它在 32-lane 基础 tile 中的位置，以及 `.warpx4` 复制后所在的四个 TMEM partitions。*
 
@@ -386,8 +387,9 @@ bank       = mapped_col
 
 ```{raw} html
 <iframe src="../demo_zh/swizzle_8x8.html" title="8x8 XOR swizzle" loading="lazy"
-        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 ```
+*交互演示：一个 8x8 tile；普通 row-major 的 column read 会产生 bank conflict，XOR swizzle 后变为 conflict-free。*
 
 *点击图中的任意 column index，可以比较普通 row-major layout 和 XOR swizzle 的 bank 映射：前者需要 8 个 cycles，后者只需要 1 个 cycle。*
 
@@ -411,8 +413,9 @@ bank       = mapped_col
 
 ```{raw} html
 <iframe src="../demo_zh/swizzle_128B.html" title="SWIZZLE_128B layout" loading="lazy"
-        style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 ```
+*交互演示：128-byte segment 内的 `SWIZZLE_128B` pattern；逐步查看 read cycle，观察 `physical_sector = logical_sector XOR row` 如何把每一列分散到不同 bank。*
 
 *图中的每个 cell 表示一个 16 B sector。逐步查看 read cycles，可以观察 XOR 如何把一列访问分散到不同 bank。*
 
@@ -424,6 +427,7 @@ bank       = mapped_col
 <iframe src="../demo_zh/swizzle_atom_general.html?v=interleaved-note-20260709" title="Swizzle atom layout per format (128B/64B/32B)" loading="lazy"
         style="width:100%; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 ```
+*交互演示：选择 swizzle format 和 data type，查看它的 atom shape（8 x N B）；悬停 cell 可查看其中 element 如何被置换。*
 
 *选择一种 swizzle 格式和数据类型，可以查看对应 atom 的形状（8 × N B）。将鼠标悬停在任意单元格上，可以看到该元素在 atom 内被重新映射到的位置。*
 

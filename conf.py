@@ -37,6 +37,7 @@ exclude_patterns = [
     "img/scripts",
     ".git",
     ".github",
+    ".venv",
 ]
 
 # --- HTML / theme ---

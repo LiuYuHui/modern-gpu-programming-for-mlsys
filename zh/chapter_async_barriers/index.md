@@ -39,6 +39,7 @@
 pending arrival count == 0
 tx-count              == 0
 ```
+*交互演示：`mbarrier` 状态视图，展示 arrival counter、phase bit，以及 `init`、`arrive` 和 `wait` 操作；点击字段可以聚焦查看。*
 
 所以，`expect_tx` 不能简单理解为“又一次普通 arrival”。它还为异步 copy 登记了需要等待的传输字节数。barrier 既要等所有 arrival 发生，也要等相关数据全部传输完成。
 
@@ -73,6 +74,7 @@ T.ptx.mbarrier.try_wait(tma_bar.ptr_to([stage]), phase_tma)
 if stage == 1:
     phase_tma ^= 1
 ```
+*交互演示：一个 barrier 在多个 pipeline iteration 中复用，展示每轮完成后 phase bit 如何翻转。*
 
 两个 barriers 初始化后都处于 phase 0，`phase_tma` 也从 0 开始。前四次 iterations 的完整状态变化如下：
 

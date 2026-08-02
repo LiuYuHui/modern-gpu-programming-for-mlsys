@@ -1,0 +1,672 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tensor Memory (TMEM) &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_tmem/index';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Async Coordination: mbarrier" href="../chapter_async_barriers/index.html" />
+    <link rel="prev" title="Blackwell Tensor Core: tcgen05.mma" href="../chapter_tensor_cores/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tma/index.html">Async Data Movement: TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tensor_cores/index.html">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_async_barriers/index.html">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_clc/index.html">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./chapter_tmem/index.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./chapter_tmem/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fchapter_tmem/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Tensor Memory (TMEM)</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-tmem-allocation-lifecycle">The TMEM Allocation Lifecycle</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#allocation-size-restrictions">Allocation-Size Restrictions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#allocation-with-cta-group-2">Allocation with <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#which-tmem-lanes-each-warp-can-access">Which TMEM Lanes Each Warp Can Access</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tcgen05-ld-and-tcgen05-st-move-data">How <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> Move Data</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shape-and-repeat-factor">Shape and Repeat Factor</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#packing-and-unpacking-16-bit-data">Packing and Unpacking 16-Bit Data</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#waiting-for-asynchronous-loads-and-stores">Waiting for Asynchronous Loads and Stores</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="tensor-memory-tmem">
+<span id="chap-tmem"></span><h1>Tensor Memory (TMEM)<a class="headerlink" href="#tensor-memory-tmem" title="Link to this heading">#</a></h1>
+<div class="overview admonition">
+<p class="admonition-title">Overview</p>
+<ul class="simple">
+<li><p>TMEM is a two-dimensional address space with Lane and Column coordinates, allocated dynamically along the Column dimension. <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> reserves space, <code class="docutils literal notranslate"><span class="pre">tcgen05.dealloc</span></code> releases it, and <code class="docutils literal notranslate"><span class="pre">tcgen05.relinquish_alloc_permit</span></code> gives up the right to make further allocations.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> are warp-collective instructions. A warp’s ID within its warpgroup determines which 32 TMEM Lane positions it can access, while <code class="docutils literal notranslate"><span class="pre">.shape</span></code> and <code class="docutils literal notranslate"><span class="pre">.num</span></code> determine how much data moves and how many registers each thread uses.</p></li>
+<li><p>TMEM loads and stores are asynchronous. Execute <code class="docutils literal notranslate"><span class="pre">tcgen05.wait::ld</span></code> before using registers produced by a load, and <code class="docutils literal notranslate"><span class="pre">tcgen05.wait::st</span></code> before reusing TMEM locations touched by a store.</p></li>
+</ul>
+</div>
+<p>Earlier chapters introduced TMEM from several directions. <a class="reference internal" href="../chapter_data_layout/index.html#chap-data-layout"><span class="std std-ref">Data Layout and Its Notation</span></a> explained the <code class="docutils literal notranslate"><span class="pre">TLane</span></code> and <code class="docutils literal notranslate"><span class="pre">TCol</span></code> axes and two-dimensional layouts. <a class="reference internal" href="../chapter_layout_generations/index.html#chap-layout-generations"><span class="std std-ref">Tensor Core Operand Layouts Across GPU Generations</span></a> traced the accumulator and scale-factor data paths. <a class="reference internal" href="../chapter_tensor_cores/index.html#chap-tensor-cores"><span class="std std-ref">Blackwell Tensor Core</span></a> then showed how <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> maps its result into TMEM.</p>
+<p>We begin by recalling TMEM’s physical structure. PTX calls its two address coordinates Lane and Column; in TIRx layout notation, the corresponding axes are <code class="docutils literal notranslate"><span class="pre">TLane</span></code> and <code class="docutils literal notranslate"><span class="pre">TCol</span></code>. A TMEM Lane is an address coordinate, not a thread’s lane ID.</p>
+<p>Each CTA has 128 positions along the Lane dimension and up to 512 positions along the Column dimension. Every <code class="docutils literal notranslate"><span class="pre">(Lane,</span> <span class="pre">Column)</span></code> cell is 32 bits. Allocating TMEM means reserving a range along the Column dimension, and every allocated column contains all 128 Lane positions.</p>
+<p><img alt="TMEM is a two-dimensional address space with 128 Lane positions and up to 512 Column positions" src="../_images/tmem_grid.png" /></p>
+<p>This chapter focuses on the two remaining practical questions: how a kernel allocates and releases TMEM, and how its warps access that storage with <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code>.</p>
+<section id="the-tmem-allocation-lifecycle">
+<h2>The TMEM Allocation Lifecycle<a class="headerlink" href="#the-tmem-allocation-lifecycle" title="Link to this heading">#</a></h2>
+<p>TMEM is allocated dynamically. <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> reserves space along the Column dimension, with legal <code class="docutils literal notranslate"><span class="pre">n_cols</span></code> values of 32, 64, 128, 256, or 512. Allocating one column reserves all 128 Lane positions in that column.</p>
+<p>The following pattern appears in later TIRx kernels:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pool</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">SMEMPool</span><span class="p">()</span>
+<span class="n">tmem_addr</span> <span class="o">=</span> <span class="n">pool</span><span class="o">.</span><span class="n">alloc</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="s2">&quot;uint32&quot;</span><span class="p">)</span>
+<span class="n">pool</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="k">if</span> <span class="n">warp_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">T</span><span class="o">.</span><span class="n">ptx</span><span class="o">.</span><span class="n">tcgen05</span><span class="o">.</span><span class="n">alloc</span><span class="p">(</span>
+        <span class="n">T</span><span class="o">.</span><span class="n">address_of</span><span class="p">(</span><span class="n">tmem_addr</span><span class="p">),</span> <span class="n">n_cols</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">cta_group</span><span class="o">=</span><span class="mi">1</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">tmem_addr</span></code> is a 32-bit slot in SMEM. When <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> succeeds, it writes the base address of the allocated TMEM region into this slot. The instruction may wait for free TMEM columns, so it is a blocking instruction.</p>
+<p>Here <code class="docutils literal notranslate"><span class="pre">warp_id</span> <span class="pre">==</span> <span class="pre">0</span></code> selects all of warp 0. <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> is warp-collective: all 32 threads in that warp must execute it with the same <code class="docutils literal notranslate"><span class="pre">n_cols</span></code>. Do not add a <code class="docutils literal notranslate"><span class="pre">lane_id</span> <span class="pre">==</span> <span class="pre">0</span></code> condition and turn it into a single-thread operation. Before other warps read <code class="docutils literal notranslate"><span class="pre">tmem_addr</span></code>, the kernel must also use the appropriate fence and CTA synchronization to make the allocation result visible throughout the CTA.</p>
+<p>Once the base address is available, TIRx can declare a TMEM buffer over the allocated region:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tmem</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">decl_buffer</span><span class="p">(</span>
+    <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+    <span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+    <span class="n">scope</span><span class="o">=</span><span class="s2">&quot;tmem&quot;</span><span class="p">,</span>
+    <span class="n">allocated_addr</span><span class="o">=</span><span class="n">tmem_addr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+    <span class="n">layout</span><span class="o">=</span><span class="n">TileLayout</span><span class="p">(</span>
+        <span class="n">S</span><span class="p">[(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span> <span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="nd">@TLane</span><span class="p">,</span> <span class="mi">1</span><span class="nd">@TCol</span><span class="p">)]</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">allocated_addr</span></code> binds the buffer to the address returned by <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code>. The layout maps logical coordinate <code class="docutils literal notranslate"><span class="pre">(m,n)</span></code> to TMEM <code class="docutils literal notranslate"><span class="pre">TLane</span></code> and <code class="docutils literal notranslate"><span class="pre">TCol</span></code>. Later code can refer to the logical element as <code class="docutils literal notranslate"><span class="pre">tmem[m,n]</span></code>, while the layout handles the hardware coordinates.</p>
+<section id="allocation-size-restrictions">
+<h3>Allocation-Size Restrictions<a class="headerlink" href="#allocation-size-restrictions" title="Link to this heading">#</a></h3>
+<p>If one CTA performs several allocations in program order, a later allocation cannot request more columns than an earlier one. For example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>256 columns -&gt; 128 columns   valid
+128 columns -&gt; 256 columns   invalid
+</pre></div>
+</div>
+<p>The kernel must therefore determine its largest TMEM requirement when it designs the allocation sequence rather than expanding the allocation later.</p>
+<p>When the storage is no longer needed, the kernel performs two operations:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">warp_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">T</span><span class="o">.</span><span class="n">ptx</span><span class="o">.</span><span class="n">tcgen05</span><span class="o">.</span><span class="n">dealloc</span><span class="p">(</span><span class="n">tmem_addr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">n_cols</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">cta_group</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">T</span><span class="o">.</span><span class="n">ptx</span><span class="o">.</span><span class="n">tcgen05</span><span class="o">.</span><span class="n">relinquish_alloc_permit</span><span class="p">(</span><span class="n">cta_group</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.dealloc</span></code> releases the allocated columns. Every TMEM allocation must be explicitly released before the kernel exits. <code class="docutils literal notranslate"><span class="pre">tcgen05.relinquish_alloc_permit</span></code> declares that the CTA will make no further TMEM allocations; after it executes, the CTA cannot call <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> again. Before cleanup begins, the kernel must ensure that asynchronous MMA, load, store, and other operations touching TMEM have completed.</p>
+</section>
+<section id="allocation-with-cta-group-2">
+<h3>Allocation with <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code><a class="headerlink" href="#allocation-with-cta-group-2" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code> involves only the current CTA, so one warp in that CTA performs the allocation and deallocation. With <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, one warp on each side of the CTA pair must execute the same <code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> or <code class="docutils literal notranslate"><span class="pre">tcgen05.dealloc</span></code>; the side that arrives first may wait for its peer.</p>
+<p>The peer CTA must therefore have launched and eventually participate in these collective operations. Within one kernel, all <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> instructions carrying a <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> qualifier must also use the same value. A kernel cannot allocate TMEM with <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code> and then access it with <code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code> forms of <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> or <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code>.</p>
+</section>
+</section>
+<section id="which-tmem-lanes-each-warp-can-access">
+<h2>Which TMEM Lanes Each Warp Can Access<a class="headerlink" href="#which-tmem-lanes-each-warp-can-access" title="Link to this heading">#</a></h2>
+<p>TMEM belongs to the CTA, but <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> do not give every warp access to all 128 Lane positions. The four warps in a warpgroup each access a fixed window of 32 TMEM Lane positions:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Warp ID within the warpgroup</p></th>
+<th class="head"><p>Accessible TMEM Lane positions</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>0-31</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>32-63</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>64-95</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>96-127</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>All four warps can access every TMEM column; only their Lane windows differ. Reading an accumulator that spans all 128 Lane positions therefore requires four warp-level accesses, one for each window. This is the concrete meaning of the “warpgroup reads TMEM” shorthand used in earlier chapters.</p>
+</section>
+<section id="how-tcgen05-ld-and-tcgen05-st-move-data">
+<h2>How <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> Move Data<a class="headerlink" href="#how-tcgen05-ld-and-tcgen05-st-move-data" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> loads data from TMEM into registers, and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> moves it in the opposite direction. Both are warp-collective instructions: every thread in the warp executes the same instruction and supplies the same TMEM address operand, <code class="docutils literal notranslate"><span class="pre">[taddr]</span></code>. The hardware uses each thread’s lane ID to distribute the access among its registers, or to place those registers back into the corresponding TMEM cells.</p>
+<p>The following figure uses an m8n8-style register fragment to illustrate both directions. This is only one local mapping supported by <code class="docutils literal notranslate"><span class="pre">tcgen05.ld/st</span></code>; the actual data movement depends on <code class="docutils literal notranslate"><span class="pre">.shape</span></code>, <code class="docutils literal notranslate"><span class="pre">.num</span></code>, and the optional <code class="docutils literal notranslate"><span class="pre">.pack::16b</span></code> or <code class="docutils literal notranslate"><span class="pre">.unpack::16b</span></code> qualifier.</p>
+<p><img alt=" loads TMEM data into a register fragment, and  writes it back in the opposite direction" src="../_images/tcgen05_ldst.svg" /></p>
+<section id="shape-and-repeat-factor">
+<h3>Shape and Repeat Factor<a class="headerlink" href="#shape-and-repeat-factor" title="Link to this heading">#</a></h3>
+<p>The amount of data moved by one load or store comes from <code class="docutils literal notranslate"><span class="pre">.shape</span></code> and <code class="docutils literal notranslate"><span class="pre">.num</span></code>. <code class="docutils literal notranslate"><span class="pre">.shape</span></code> specifies how many TMEM lanes participate and the base amount of data taken from each lane. <code class="docutils literal notranslate"><span class="pre">.num</span></code> repeats that amount. For example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>tcgen05.ld.sync.aligned.16x128b.x4.b32
+    {r0, r1, r2, r3, r4, r5, r6, r7}, [taddr]
+</pre></div>
+</div>
+<p>The next figure expands this instruction from left to right. Each horizontal row on the left is one TMEM lane. The four blue groups in a row correspond to the four repetitions selected by <code class="docutils literal notranslate"><span class="pre">.x4</span></code>. Each group contains four cells, representing the 128 bits in <code class="docutils literal notranslate"><span class="pre">.16x128b</span></code>; one small cell is one 32-bit TMEM cell.</p>
+<p><img alt="Each TMEM lane contains four 128-bit groups, and every thread receives eight 32-bit registers" src="../_images/tcgen05_ldst_lane_register_volume_en.svg" /></p>
+<p>The left side therefore contains</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>16 lanes × 4 groups/lane × 4 cells/group
+    = 256 32-bit TMEM cells
+</pre></div>
+</div>
+<p>The 32 boxes on the right represent the 32 threads in the warp. The <code class="docutils literal notranslate"><span class="pre">r0-r7</span></code> inside each box are that thread’s own eight 32-bit registers. <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> distributes the 256 cells among those registers, giving each thread</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>256 cells / 32 threads = 8 32-bit registers/thread
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> moves the same amount of data in the opposite direction. The figure counts data volume only; the instruction’s fragment mapping still determines which TMEM cell corresponds to which register slot in which thread.</p>
+<p>Changing <code class="docutils literal notranslate"><span class="pre">.x4</span></code> to <code class="docutils literal notranslate"><span class="pre">.x1</span></code> leaves only one 128-bit group in each lane. The instruction then moves <code class="docutils literal notranslate"><span class="pre">16</span> <span class="pre">×</span> <span class="pre">1</span> <span class="pre">×</span> <span class="pre">4</span> <span class="pre">=</span> <span class="pre">64</span></code> cells, which gives each of the 32 threads two 32-bit registers.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Instruction form</p></th>
+<th class="head text-right"><p>Data per lane</p></th>
+<th class="head text-right"><p>Registers per thread</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.16x128b.x1</span></code></p></td>
+<td class="text-right"><p>128 bits</p></td>
+<td class="text-right"><p>2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.16x128b.x2</span></code></p></td>
+<td class="text-right"><p>256 bits</p></td>
+<td class="text-right"><p>4</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.16x128b.x4</span></code></p></td>
+<td class="text-right"><p>512 bits</p></td>
+<td class="text-right"><p>8</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.16x128b.x8</span></code></p></td>
+<td class="text-right"><p>1024 bits</p></td>
+<td class="text-right"><p>16</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>This data-movement shape is different from the <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">×</span> <span class="pre">N</span> <span class="pre">×</span> <span class="pre">K</span></code> instruction shape of MMA. The MMA shape gives the logical dimensions of the matrix multiplication. Here, <code class="docutils literal notranslate"><span class="pre">.shape</span></code> describes the hardware movement between TMEM and registers. The register fragments in <a class="reference internal" href="../chapter_layout_generations/index.html#chap-layout-generations"><span class="std std-ref">Tensor Core Operand Layouts Across GPU Generations</span></a> explain how those registers map back to logical matrix elements.</p>
+</section>
+<section id="packing-and-unpacking-16-bit-data">
+<h3>Packing and Unpacking 16-Bit Data<a class="headerlink" href="#packing-and-unpacking-16-bit-data" title="Link to this heading">#</a></h3>
+<p>Each TMEM cell and each register operand of <code class="docutils literal notranslate"><span class="pre">tcgen05.ld/st</span></code> is 32 bits, but a kernel may manipulate 16-bit pieces of data. On <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code>, <code class="docutils literal notranslate"><span class="pre">.pack::16b</span></code> combines two 16-bit pieces from adjacent TMEM columns into one 32-bit register. On <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code>, <code class="docutils literal notranslate"><span class="pre">.unpack::16b</span></code> splits one 32-bit register into two 16-bit pieces and writes them to adjacent TMEM columns.</p>
+<p>Packing and unpacking change only how data is organized while moving between TMEM and registers. They do not change the allocation unit: TMEM is still allocated along the Column dimension, and every allocated column still contains all 128 Lane positions.</p>
+</section>
+<section id="waiting-for-asynchronous-loads-and-stores">
+<h3>Waiting for Asynchronous Loads and Stores<a class="headerlink" href="#waiting-for-asynchronous-loads-and-stores" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> are asynchronous. After a load, execute <code class="docutils literal notranslate"><span class="pre">tcgen05.wait::ld</span></code> before using the destination registers. After a store, use <code class="docutils literal notranslate"><span class="pre">tcgen05.wait::st</span></code> before relying on the write being complete. Each wait covers all earlier <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> or <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> operations issued by the current thread, respectively.</p>
+<p>If another thread or warp will consume the data, waiting for the asynchronous operation is not enough by itself. The kernel also needs thread synchronization and the appropriate <code class="docutils literal notranslate"><span class="pre">tcgen05.fence</span></code> to establish ordering across threads.</p>
+<p>The SMEM-to-TMEM instruction <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> uses a different set of shapes and a different completion mechanism. Its role in moving scale factors for block-scaled MMA was covered in <a class="reference internal" href="../chapter_layout_generations/index.html#chap-layout-generations"><span class="std std-ref">Tensor Core Operand Layouts Across GPU Generations</span></a> and <a class="reference internal" href="../chapter_tensor_cores/index.html#chap-tensor-cores"><span class="std std-ref">Blackwell Tensor Core</span></a>, so we will not repeat it here.</p>
+<p>When reading a kernel that uses TMEM, check four things in order: how many columns it allocates and releases, which Lane window the current warp may access, how many registers the <code class="docutils literal notranslate"><span class="pre">.shape</span></code> and <code class="docutils literal notranslate"><span class="pre">.num</span></code> of each <code class="docutils literal notranslate"><span class="pre">ld/st</span></code> produce, and whether the corresponding asynchronous operation has completed. Together, these checks connect TMEM’s resource lifetime, data layout, and synchronization protocol.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../chapter_tensor_cores/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../chapter_async_barriers/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Async Coordination: mbarrier</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-tmem-allocation-lifecycle">The TMEM Allocation Lifecycle</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#allocation-size-restrictions">Allocation-Size Restrictions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#allocation-with-cta-group-2">Allocation with <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#which-tmem-lanes-each-warp-can-access">Which TMEM Lanes Each Warp Can Access</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tcgen05-ld-and-tcgen05-st-move-data">How <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05.st</span></code> Move Data</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shape-and-repeat-factor">Shape and Repeat Factor</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#packing-and-unpacking-16-bit-data">Packing and Unpacking 16-Bit Data</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#waiting-for-asynchronous-loads-and-stores">Waiting for Asynchronous Loads and Stores</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

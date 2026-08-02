@@ -1,0 +1,742 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Blackwell Tensor Core: tcgen05.mma &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_tensor_cores/index';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Tensor Memory (TMEM)" href="../chapter_tmem/index.html" />
+    <link rel="prev" title="Async Data Movement: TMA" href="../chapter_tma/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tma/index.html">Async Data Movement: TMA</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tmem/index.html">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_async_barriers/index.html">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_clc/index.html">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./chapter_tensor_cores/index.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./chapter_tensor_cores/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fchapter_tensor_cores/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Blackwell Tensor Core: tcgen05.mma</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tcgen05-mma-executes">How <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> Executes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-accumulator-in-tmem">The Accumulator in TMEM</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-cta-group-sets-the-operation-scope">How <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> Sets the Operation Scope</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-1-m-128"><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-1-m-64-without-ws"><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">64</span></code> (without <code class="docutils literal notranslate"><span class="pre">.ws</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-2-m-256"><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">256</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-2-m-128-dense-a"><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code> (dense A)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#block-scaled-mma">Block-Scaled MMA</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#placing-scale-factors-across-two-ctas">Placing Scale Factors Across Two CTAs</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#handing-data-between-tcgen05-instructions">Handing Data Between <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> Instructions</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="blackwell-tensor-core-tcgen05-mma">
+<span id="chap-tensor-cores"></span><h1>Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code><a class="headerlink" href="#blackwell-tensor-core-tcgen05-mma" title="Link to this heading">#</a></h1>
+<div class="overview admonition">
+<p class="admonition-title">Overview</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> typically reads A and B from SMEM and updates the C/D accumulator in TMEM. The epilogue later brings the result back into registers with <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code> uses the current CTA, while <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code> uses a CTA pair. The two modes use different TMEM accumulator mappings.</p></li>
+<li><p>Block-scaled MMA also needs SFA and SFB in TMEM. In the loading path used here, these scale factors first enter SMEM, then move to TMEM through <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code>, where they are sharded or replicated according to how the CTA pair divides A and B.</p></li>
+</ul>
+</div>
+<p><a class="reference internal" href="../chapter_layout_generations/index.html#chap-layout-generations"><span class="std std-ref">Tensor Core Operand Layouts Across GPU Generations</span></a> traced the data path for matrix multiply-accumulate (MMA) across Ampere, Hopper, and Blackwell. This chapter narrows the focus to Blackwell’s <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>: how one MMA is issued, how its accumulator maps into TMEM, and how <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> determines whether the operation uses the current CTA or a CTA pair.</p>
+<p>TMA, introduced in the previous chapter (<a class="reference internal" href="../chapter_tma/index.html#chap-tma"><span class="std std-ref">Async Data Movement: TMA</span></a>), usually moves A and B tiles into SMEM asynchronously. We begin after those tiles have arrived. From there, we will see how <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> performs the matrix multiply-accumulate, where it places the result in TMEM, and why block-scaled MMA needs an additional scale-factor path.</p>
+<div style="overflow-x:auto;">
+<iframe src="../demo/tcgen05_intro.html?v=block-units-20260715" title="tcgen05 and Tensor Memory" loading="lazy"
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Keep the default <code class="docutils literal notranslate"><span class="pre">M=128</span></code> and <code class="docutils literal notranslate"><span class="pre">N=16</span></code>, then step forward along K to watch the partial products accumulate in TMEM. You can also transpose A or B, or change N, to compare the input tiles, output tile, and instruction parameters for different configurations.</em></p>
+<p>Start with the default view. Each cell represents a <code class="docutils literal notranslate"><span class="pre">16</span> <span class="pre">×</span> <span class="pre">16</span></code> block of elements. Although the output tile C has shape <code class="docutils literal notranslate"><span class="pre">128</span> <span class="pre">×</span> <span class="pre">16</span></code>, it therefore appears as an 8-by-1 grid of cells. Each click on <strong>K iteration</strong> makes the Tensor Core read one <code class="docutils literal notranslate"><span class="pre">128</span> <span class="pre">×</span> <span class="pre">16</span></code> slice of A, shown as <code class="docutils literal notranslate"><span class="pre">8</span> <span class="pre">×</span> <span class="pre">1</span></code> blocks, and one <code class="docutils literal notranslate"><span class="pre">16</span> <span class="pre">×</span> <span class="pre">16</span></code> slice of B, shown as a single block. Their product contributes one <code class="docutils literal notranslate"><span class="pre">128</span> <span class="pre">×</span> <span class="pre">16</span></code> partial result.</p>
+<p>The first iteration uses <code class="docutils literal notranslate"><span class="pre">accum=0</span></code>. It does not read the existing TMEM accumulator and writes the current product directly into the C tile:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>C[0:128, 0:16] =
+    A[0:128, k:k+16] × B[k:k+16, 0:16]
+</pre></div>
+</div>
+<p>Later iterations use <code class="docutils literal notranslate"><span class="pre">accum=1</span></code> and add each new partial result to the value already in TMEM:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>C[0:128, 0:16] +=
+    A[0:128, k:k+16] × B[k:k+16, 0:16]
+</pre></div>
+</div>
+<p>Every K iteration updates the same <code class="docutils literal notranslate"><span class="pre">128</span> <span class="pre">×</span> <span class="pre">16</span></code> TMEM region. That region contains the final C tile only after the last iteration completes.</p>
+<p>The bottom of the figure also shows the descriptors and PTX instruction used by this MMA. The next section explains their fields.</p>
+<p>We will now look at how the instruction is issued, what <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> controls, and how the accumulator maps into TMEM.</p>
+<section id="how-tcgen05-mma-executes">
+<h2>How <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> Executes<a class="headerlink" href="#how-tcgen05-mma-executes" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> is Blackwell’s Tensor Core matrix multiply-accumulate instruction. It operates on a complete matrix tile rather than assigning an independent scalar multiply-accumulate to each thread.</p>
+<p>Unlike Ampere’s <code class="docutils literal notranslate"><span class="pre">mma.sync</span></code> and Hopper’s <code class="docutils literal notranslate"><span class="pre">wgmma.mma_async</span></code>, <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> has single-thread semantics. One elected thread issues the instruction, and the hardware launches the full tile-level MMA. The other threads do not each submit a copy of the same instruction.</p>
+<p>The following is a common <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> form for the case where both A and B reside in SMEM and block scaling is disabled:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>tcgen05.mma.cta_group.kind
+    [d-tmem], a-desc, b-desc, idesc,
+    {disable-output-lane}, enable-input-d {, scale-input-d};
+</pre></div>
+</div>
+<p>Its operands and qualifiers have the following roles:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cta_group</span></code></p></td>
+<td><p>Selects the current CTA or a CTA pair as the resources used by the MMA</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">kind</span></code></p></td>
+<td><p>Selects the data-type family for A and B</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">d-tmem</span></code></p></td>
+<td><p>Gives the starting TMEM address of the C/D accumulator</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">a-desc</span></code>, <code class="docutils literal notranslate"><span class="pre">b-desc</span></code></p></td>
+<td><p>Describe the addresses and layouts of A and B in SMEM</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">idesc</span></code></p></td>
+<td><p>Specifies M, N, K, the concrete A/B and C/D data types, operand major modes, and other instruction parameters</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">disable-output-lane</span></code></p></td>
+<td><p>Selects TMEM lanes that will not be updated; the default example leaves every lane enabled</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">enable-input-d</span></code></p></td>
+<td><p>Corresponds to <code class="docutils literal notranslate"><span class="pre">accum</span></code> in the interactive figure: false computes <code class="docutils literal notranslate"><span class="pre">D=A</span> <span class="pre">×</span> <span class="pre">B</span></code>, while true computes <code class="docutils literal notranslate"><span class="pre">D=A</span> <span class="pre">×</span> <span class="pre">B+D</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scale-input-d</span></code></p></td>
+<td><p>Optionally scales the existing D before accumulation; the examples in this chapter do not use it</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The default configuration in the interactive figure uses <code class="docutils literal notranslate"><span class="pre">cta_group::1.kind::f16</span></code>. Later kernels in this book also commonly use <code class="docutils literal notranslate"><span class="pre">.kind::f16</span></code> with an <code class="docutils literal notranslate"><span class="pre">f32</span></code> accumulator selected in <code class="docutils literal notranslate"><span class="pre">idesc</span></code>. Here <code class="docutils literal notranslate"><span class="pre">.kind::f16</span></code> identifies the 16-bit floating-point family for A and B. <code class="docutils literal notranslate"><span class="pre">idesc</span></code> separately chooses whether A and B are <code class="docutils literal notranslate"><span class="pre">f16</span></code> or <code class="docutils literal notranslate"><span class="pre">bf16</span></code>, and whether C/D is <code class="docutils literal notranslate"><span class="pre">f16</span></code> or <code class="docutils literal notranslate"><span class="pre">f32</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">cta_group</span></code> does not change the single-thread issue semantics. It only determines whether the operation uses the current CTA or a CTA pair. The corresponding CTA responsibilities and TMEM mappings, along with the SFA and SFB addresses needed by block-scaled forms, appear later in this chapter.</p>
+<p>For the path considered here, where A and B come from SMEM, two layouts matter:</p>
+<ul class="simple">
+<li><p>The SMEM layout determines how the Tensor Core interprets and reads A and B.</p></li>
+<li><p>The TMEM layout determines how the C/D accumulator maps to TMEM lanes and columns.</p></li>
+</ul>
+<p>These layouts belong to different memory spaces. Their concrete mappings depend on the instruction shape, data types, and operand major modes of the current <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>. We will use the named axes and swizzle concepts introduced in <a class="reference internal" href="../chapter_data_layout/index.html#chap-data-layout"><span class="std std-ref">Data Layout and Its Notation</span></a> to describe them.</p>
+<p>Issuing <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> starts an asynchronous operation; it does not mean the result has already reached TMEM. The same thread can issue one or more MMA instructions and then execute</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>tcgen05.commit
+</pre></div>
+</div>
+<p>to make an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> track the asynchronous <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> operations previously issued by that thread. When the hardware finishes those operations, it signals completion through the barrier.</p>
+<p>Other warps can move data or prepare later tiles while the MMA is in flight. Before a consumer reads the accumulator with <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code>, it must wait for the corresponding <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> and execute</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>tcgen05.fence::after_thread_sync
+</pre></div>
+</div>
+<p>to order the completion notification before the subsequent TMEM access. Otherwise, the epilogue could read TMEM while the accumulator is still being updated. The asynchronous synchronization chapter develops this protocol in detail.</p>
+</section>
+<section id="the-accumulator-in-tmem">
+<h2>The Accumulator in TMEM<a class="headerlink" href="#the-accumulator-in-tmem" title="Link to this heading">#</a></h2>
+<p>In the PTX programming model for Ampere and Hopper, the accumulator resides in registers. MMA results are distributed across the participating threads as register fragments, which the epilogue can read and process directly. As the accumulator tile grows, those long-lived fragments consume more registers.</p>
+<p>Blackwell moves the long-lived accumulator into TMEM. TMEM is a two-dimensional, CTA-scoped on-chip memory space. On <code class="docutils literal notranslate"><span class="pre">sm_100a</span></code>, each CTA has 128 Lane rows and 512 Col columns, with one 32-bit cell at each Lane/Col coordinate. <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> repeatedly updates the accumulator in TMEM, and the epilogue eventually loads it into registers with <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> for conversion, elementwise work, and stores.</p>
+<p><code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> is itself asynchronous. Before using its destination registers, the warp must execute <code class="docutils literal notranslate"><span class="pre">tcgen05.wait::ld</span></code> to confirm that its earlier TMEM loads have completed.</p>
+<p>The accumulator therefore no longer occupies registers throughout the main loop. Instead, the kernel must manage TMEM allocation and layout: MMA must write each result to the right TMEM coordinates, and the epilogue must read it back with a matching layout. The next chapter covers TMEM allocation, addressing, and data movement.</p>
+</section>
+<section id="how-cta-group-sets-the-operation-scope">
+<h2>How <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> Sets the Operation Scope<a class="headerlink" href="#how-cta-group-sets-the-operation-scope" title="Link to this heading">#</a></h2>
+<p>With <code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, the MMA updates only the current CTA’s TMEM. We begin with the common dense-A path, where every A element is stored explicitly and descriptors supply both A and B from SMEM. Some <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> variants can instead read A from TMEM.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, the MMA accesses the TMEM of both CTAs in a pair. A CTA pair consists of two CTAs in the same cluster whose <code class="docutils literal notranslate"><span class="pre">%cluster_ctarank</span></code> values differ only in the least-significant bit. One rank is even and the other is odd; we refer to them below as the even CTA and the odd CTA.</p>
+<p>Only one thread in the CTA pair needs to issue <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>. That thread may belong to either CTA, but the peer CTA must remain active. The kernels later in this book generally elect one thread in the even CTA to issue the MMA and use <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code> to arrange completion notification.</p>
+<p>The accumulator layout depends on four choices: <code class="docutils literal notranslate"><span class="pre">cta_group</span></code>, the size of M, whether A is dense or structured sparse, and whether the instruction is ordinary <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> or the weight-stationary <code class="docutils literal notranslate"><span class="pre">tcgen05.mma.ws</span></code>. The selected layout maps each logical coordinate <code class="docutils literal notranslate"><span class="pre">(m,n)</span></code> to <code class="docutils literal notranslate"><span class="pre">TLane</span></code> and <code class="docutils literal notranslate"><span class="pre">TCol</span></code>.</p>
+<p>The instruction descriptor supplies N. For the <code class="docutils literal notranslate"><span class="pre">f16</span></code>/<code class="docutils literal notranslate"><span class="pre">bf16</span></code> path considered here, <code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code> supports N from 8 through 256 in increments of 8, while <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code> supports N from 16 through 256 in increments of 16. The four figures below use the symbol N for any of these legal values. Purple denotes SMEM operands, orange denotes the TMEM accumulator, and green denotes the Tensor Core MMA path.</p>
+<section id="cta-group-1-m-128">
+<h3><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code><a class="headerlink" href="#cta-group-1-m-128" title="Link to this heading">#</a></h3>
+<p>This is the direct case. One CTA computes a 128-row output tile, and its TMEM has exactly 128 Lane rows. Accumulator row <code class="docutils literal notranslate"><span class="pre">m</span></code> therefore maps directly to TMEM Lane <code class="docutils literal notranslate"><span class="pre">m</span></code>, while N extends across TMEM columns.</p>
+<p>The result occupies 128 Lane rows and N Col columns. The CTA reads A and B from its own SMEM and keeps the complete accumulator tile in its own TMEM.</p>
+<p><img alt=", : row m maps directly to TMEM Lane m" src="../_images/mma_cg1_m128.svg" /></p>
+</section>
+<section id="cta-group-1-m-64-without-ws">
+<h3><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">64</span></code> (without <code class="docutils literal notranslate"><span class="pre">.ws</span></code>)<a class="headerlink" href="#cta-group-1-m-64-without-ws" title="Link to this heading">#</a></h3>
+<p>Following the notation used above, the figures label the MMA output accumulator as <code class="docutils literal notranslate"><span class="pre">C</span></code>. Its logical shape is <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">x</span> <span class="pre">N</span></code>; this section sets <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">64</span></code>, so <code class="docutils literal notranslate"><span class="pre">C</span></code> has shape <code class="docutils literal notranslate"><span class="pre">64</span> <span class="pre">x</span> <span class="pre">N</span></code>. TMEM still has 128 Lane rows. This section covers ordinary <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>, not the weight-stationary <code class="docutils literal notranslate"><span class="pre">.ws</span></code> form. Its TMEM mapping uses Layout F.</p>
+<p>Layout F divides the 128 TMEM lanes into four 32-lane regions, corresponding to <code class="docutils literal notranslate"><span class="pre">warp-rank</span> <span class="pre">%</span> <span class="pre">4</span> <span class="pre">=</span> <span class="pre">0,1,2,3</span></code> in the hardware data path. It also divides the 64 M rows into four groups of 16 and places one group in each region. Because a group contains only 16 rows, the current tile uses only half of each 32-lane region.</p>
+<p>Let <code class="docutils literal notranslate"><span class="pre">a</span></code> be the TMEM lane alignment, either 0 or 16. Logical row <code class="docutils literal notranslate"><span class="pre">m</span></code> maps to</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>group        = m // 16
+row_in_group = m % 16
+TLane        = group * 32 + a + row_in_group
+</pre></div>
+</div>
+<p>With lane alignment 0, the mapping is</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>rows  0-15  -&gt; lanes   0-15
+rows 16-31  -&gt; lanes  32-47
+rows 32-47  -&gt; lanes  64-79
+rows 48-63  -&gt; lanes 96-111
+</pre></div>
+</div>
+<p>Lanes <code class="docutils literal notranslate"><span class="pre">16-31</span></code>, <code class="docutils literal notranslate"><span class="pre">48-63</span></code>, <code class="docutils literal notranslate"><span class="pre">80-95</span></code>, and <code class="docutils literal notranslate"><span class="pre">112-127</span></code> do not belong to this tile.</p>
+<p>If the kernel needs to retain a second, independent <code class="docutils literal notranslate"><span class="pre">M=64</span></code> accumulator tile, it can set that tile’s lane alignment to 16. Its four row groups then map to the Lane positions left unused above:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>rows  0-15  -&gt; lanes  16-31
+rows 16-31  -&gt; lanes  48-63
+rows 32-47  -&gt; lanes  80-95
+rows 48-63  -&gt; lanes 112-127
+</pre></div>
+</div>
+<p>In the figure, the orange bands show the current tile with lane alignment 0, while the hatched bands show the positions available with lane alignment 16. The two tiles can use the same TMEM columns because their Lane positions do not overlap. N still extends across the TMEM columns.</p>
+<p><img alt=", , without : four 16-row groups use a Lane stride of 32; lane alignment 0 or 16 selects complementary positions" src="../_images/mma_cg1_m64.svg" /></p>
+</section>
+<section id="cta-group-2-m-256">
+<h3><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">256</span></code><a class="headerlink" href="#cta-group-2-m-256" title="Link to this heading">#</a></h3>
+<p>When <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">256</span></code>, the 128 Lane rows of one CTA cannot hold the complete M dimension, so the accumulator is distributed across the two TMEM allocations in the CTA pair.</p>
+<p>The even CTA stores logical rows <code class="docutils literal notranslate"><span class="pre">0-127</span></code>, and the odd CTA stores rows <code class="docutils literal notranslate"><span class="pre">128-255</span></code>. Each CTA uses lanes <code class="docutils literal notranslate"><span class="pre">0-127</span></code> in its own TMEM, while N extends across all of its corresponding TMEM columns.</p>
+<p>Physically, these are two separate 128-row TMEM regions owned by different CTAs. Logically, they form one <code class="docutils literal notranslate"><span class="pre">256</span> <span class="pre">×</span> <span class="pre">N</span></code> accumulator tile. How A and B are distributed across the two CTAs’ SMEM depends on the kernel and is not part of this accumulator layout.</p>
+<p><img alt=", : M is split contiguously across the CTA pair, with 128 rows in each CTA" src="../_images/mma_cg2_m256.svg" /></p>
+</section>
+<section id="cta-group-2-m-128-dense-a">
+<h3><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code> (dense A)<a class="headerlink" href="#cta-group-2-m-128-dense-a" title="Link to this heading">#</a></h3>
+<p>For <code class="docutils literal notranslate"><span class="pre">cta_group::2,</span> <span class="pre">M=128</span></code> with dense A, PTX uses Layout B for the accumulator. It first divides M across the pair: the even CTA stores C rows <code class="docutils literal notranslate"><span class="pre">0-63</span></code>, and the odd CTA stores rows <code class="docutils literal notranslate"><span class="pre">64-127</span></code>.</p>
+<p>Within each CTA, its 64 M rows are divided into two groups of 32, and N is divided into a lower and an upper half. The two row groups and two N halves form a 2-by-2 mapping onto that CTA’s four 32-lane regions:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>N range</p></th>
+<th class="head"><p>Local M rows in the CTA</p></th>
+<th class="head"><p>TMEM lanes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">...</span> <span class="pre">N/2-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0-31</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0-31</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">...</span> <span class="pre">N/2-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">32-63</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">32-63</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">N/2</span> <span class="pre">...</span> <span class="pre">N-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0-31</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">64-95</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">N/2</span> <span class="pre">...</span> <span class="pre">N-1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">32-63</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">96-127</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Let <code class="docutils literal notranslate"><span class="pre">m_local</span> <span class="pre">=</span> <span class="pre">m</span> <span class="pre">%</span> <span class="pre">64</span></code>. The CTA and TLane for logical element <code class="docutils literal notranslate"><span class="pre">C[m,n]</span></code> are</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>CTA   = even,  if m &lt; 64
+        odd,   if m &gt;= 64
+
+TLane = m_local,       if n &lt; N/2
+        64 + m_local,  if n &gt;= N/2
+</pre></div>
+</div>
+<p>For example, when <code class="docutils literal notranslate"><span class="pre">N=16</span></code>, <code class="docutils literal notranslate"><span class="pre">C[10,3]</span></code> resides at TLane 10 in the even CTA. <code class="docutils literal notranslate"><span class="pre">C[10,11]</span></code> remains in the even CTA, but because it belongs to the upper half of N, it maps to TLane 74.</p>
+<p>This is Layout B for dense A. With structured-sparse A, <code class="docutils literal notranslate"><span class="pre">cta_group::2,</span> <span class="pre">M=128</span></code> uses Layout C instead, so the mapping above does not apply.</p>
+<p><img alt=", , dense A: each CTA stores 64 M rows, and the two halves of N map to the lower and upper halves of the Lane axis" src="../_images/mma_cg2_m128.svg" /></p>
+<p>These four layouts specify the CTA and TMEM location to which <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> writes each accumulator element. A later <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> must use a compatible TMEM address and load shape to reconstruct the original logical C tile.</p>
+</section>
+</section>
+<section id="block-scaled-mma">
+<h2>Block-Scaled MMA<a class="headerlink" href="#block-scaled-mma" title="Link to this heading">#</a></h2>
+<p>MXFP8 and NVFP4 are two concrete block-scaled formats introduced earlier. <a class="reference internal" href="../chapter_data_layout/index.html#chap-data-layout"><span class="std std-ref">Data Layout and Its Notation</span></a> explained block scaling and derived the packing and cross-warp replication of SFA and SFB in TMEM. <a class="reference internal" href="../chapter_layout_generations/index.html#chap-layout-generations"><span class="std std-ref">Tensor Core Operand Layouts Across GPU Generations</span></a> then followed the <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> data path and explained how <code class="docutils literal notranslate"><span class="pre">scale_vec</span></code> selects bytes. We will not repeat those details here. Instead, we will focus on where the scale factors reside in a CTA pair.</p>
+<p>We need two relationships. <code class="docutils literal notranslate"><span class="pre">SFA(M,SFK)</span></code> supplies scale factors for each row of A, while <code class="docutils literal notranslate"><span class="pre">SFB(N,SFK)</span></code> supplies them for each column of B. Block-scaled <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> reads these factors from TMEM while continuing to read A and B from SMEM:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A, B:     global memory -&gt; SMEM -&gt; tcgen05.mma
+SFA, SFB: global memory -&gt; SMEM -&gt; tcgen05.cp -&gt; TMEM -&gt; tcgen05.mma
+</pre></div>
+</div>
+<section id="placing-scale-factors-across-two-ctas">
+<h3>Placing Scale Factors Across Two CTAs<a class="headerlink" href="#placing-scale-factors-across-two-ctas" title="Link to this heading">#</a></h3>
+<p>For output coordinate <code class="docutils literal notranslate"><span class="pre">(m,n)</span></code>, A uses <code class="docutils literal notranslate"><span class="pre">SFA[m,sfk]</span></code> and B uses <code class="docutils literal notranslate"><span class="pre">SFB[n,sfk]</span></code>. Scale-factor placement in a CTA pair therefore follows the division of M and N.</p>
+<p>Consider the <code class="docutils literal notranslate"><span class="pre">M=256</span></code> MMA in the figure. The even CTA computes C rows <code class="docutils literal notranslate"><span class="pre">0-127</span></code>, while the odd CTA computes rows <code class="docutils literal notranslate"><span class="pre">128-255</span></code>. Each side needs only the SFA entries for its own A rows:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>even CTA: SFA[0:128,   :]
+odd CTA:  SFA[128:256, :]
+</pre></div>
+</div>
+<p>The figure uses a common implementation: each CTA moves half of B’s N columns into its local SMEM, while the cooperative MMA consumes the complete B tile. The SFB entries for the full N dimension must therefore be available to both CTAs:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>SFB[0:N, :]
+</pre></div>
+</div>
+<p>A common implementation first multicasts SFB into the two SMEM allocations in the CTA pair. A <code class="docutils literal notranslate"><span class="pre">tcgen05.cp.cta_group::2</span></code> operation then copies the data from each CTA’s local SMEM into its local TMEM.</p>
+<p>There is a second level of replication within each CTA. For both SFA and SFB, <code class="docutils literal notranslate"><span class="pre">tcgen05.cp.32x128b.warpx4</span></code> copies the packed 32-lane base layout into all four 32-lane TMEM partitions: <code class="docutils literal notranslate"><span class="pre">TLane</span> <span class="pre">0-31</span></code>, <code class="docutils literal notranslate"><span class="pre">32-63</span></code>, <code class="docutils literal notranslate"><span class="pre">64-95</span></code>, and <code class="docutils literal notranslate"><span class="pre">96-127</span></code>.</p>
+<p>The figure therefore shows SFA sharded along M and a complete SFB copy in each CTA. Within each CTA, both scale-factor layouts are also replicated across its four 32-lane partitions.</p>
+<p><img alt="Data placement for block-scaled MMA: A and B are packed in SMEM; SFA, SFB, and C reside in TMEM; SFA is sharded along M, while SFB is multicast to the CTA pair" src="../_images/mma_block_scaled.svg" /></p>
+</section>
+</section>
+<section id="handing-data-between-tcgen05-instructions">
+<h2>Handing Data Between <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> Instructions<a class="headerlink" href="#handing-data-between-tcgen05-instructions" title="Link to this heading">#</a></h2>
+<p>Although one thread issues <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>, the instruction performs a tile-level cooperative operation. <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> determines whether it uses the SMEM and TMEM resources of the current CTA or of a CTA pair. The corresponding TMEM layout then determines the CTA and <code class="docutils literal notranslate"><span class="pre">TLane</span></code>/<code class="docutils literal notranslate"><span class="pre">TCol</span></code> coordinates that receive each accumulator element. In the block-scaled path used here, SFA and SFB first move into TMEM through <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> and are sharded or replicated according to the division of A and B across the pair.</p>
+<p>Connecting asynchronous instructions such as <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code>, <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>, and <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code> requires three conditions: the operation must target the correct CTA or CTA pair, the producer’s output layout must match the layout expected by the consumer, and the consumer must use the corresponding completion and ordering mechanism before accessing the data. If any condition fails, the hardware may interpret the wrong TMEM coordinates or read data that is still being updated.</p>
+<p>The key to understanding <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> is therefore to ask three questions: which CTA resources does this instruction use, where does it map the data, and when may the next stage safely consume the result?</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../chapter_tma/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Async Data Movement: TMA</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../chapter_tmem/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Tensor Memory (TMEM)</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tcgen05-mma-executes">How <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> Executes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-accumulator-in-tmem">The Accumulator in TMEM</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-cta-group-sets-the-operation-scope">How <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> Sets the Operation Scope</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-1-m-128"><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-1-m-64-without-ws"><code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">64</span></code> (without <code class="docutils literal notranslate"><span class="pre">.ws</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-2-m-256"><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">256</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cta-group-2-m-128-dense-a"><code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, <code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">=</span> <span class="pre">128</span></code> (dense A)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#block-scaled-mma">Block-Scaled MMA</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#placing-scale-factors-across-two-ctas">Placing Scale Factors Across Two CTAs</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#handing-data-between-tcgen05-instructions">Handing Data Between <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> Instructions</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

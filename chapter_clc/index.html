@@ -1,0 +1,588 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Advanced Scheduling: Cluster Launch Control &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_clc/index';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Introduction to TIRx" href="../chapter_intro_tirx/index.html" />
+    <link rel="prev" title="Async Coordination: mbarrier" href="../chapter_async_barriers/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tma/index.html">Async Data Movement: TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tensor_cores/index.html">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tmem/index.html">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_async_barriers/index.html">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./chapter_clc/index.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./chapter_clc/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fchapter_clc/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Advanced Scheduling: Cluster Launch Control</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-limits-of-a-static-persistent-scheduler">The limits of a static persistent scheduler</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#one-clc-request">One CLC request</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overlapping-the-request-with-the-current-tile">Overlapping the request with the current tile</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-use-clc">When to use CLC</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="advanced-scheduling-cluster-launch-control">
+<span id="chap-clc"></span><h1>Advanced Scheduling: Cluster Launch Control<a class="headerlink" href="#advanced-scheduling-cluster-launch-control" title="Link to this heading">#</a></h1>
+<div class="overview admonition">
+<p class="admonition-title">Overview</p>
+<ul class="simple">
+<li><p>A persistent kernel lets resident CTAs or CTA clusters compute multiple output tiles, reducing launch and repeated setup overhead.</p></li>
+<li><p>Cluster Launch Control (CLC) lets a running CTA or cluster cancel a launch that has not started and take over its grid coordinate.</p></li>
+<li><p>A CLC request completes asynchronously and returns its result through shared memory and an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>. Workers that finish early can claim pending work instead of remaining idle.</p></li>
+</ul>
+</div>
+<p>The previous chapters focused on how one tile is computed: how A and B reach SMEM, how the Tensor Core executes MMA, and how asynchronous operations hand data off through an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>. Once a matrix has been divided into many output tiles, the kernel faces another question: in what order should those tiles be assigned to CTAs or CTA clusters?</p>
+<p>Suppose the output matrix contains 100 tiles. The most direct launch uses 100 CTAs: CTA 0 computes tile 0, CTA 1 computes tile 1, and so on. The GPU usually cannot run all 100 CTAs at once. It starts a subset, then launches later CTAs as running CTAs finish and release resources, until every tile has been processed.</p>
+<p>A conventional persistent kernel takes a different approach. It launches a fixed pool of long-lived CTAs or clusters and lets each worker compute several tiles in a loop. This can reduce CTA launch and repeated setup overhead, but it introduces a scheduling question: after a worker finishes its current tile, where does the next tile come from?</p>
+<p>Blackwell’s Cluster Launch Control (CLC) answers that question. A CLC kernel still launches a grid that covers the complete output space, but a running worker can cancel a CTA or cluster launch that has not yet started and inherit its coordinate. The launch grid retains a coordinate for every task, while resident workers dynamically claim work according to when they become available.</p>
+<section id="the-limits-of-a-static-persistent-scheduler">
+<h2>The limits of a static persistent scheduler<a class="headerlink" href="#the-limits-of-a-static-persistent-scheduler" title="Link to this heading">#</a></h2>
+<p>In this chapter, a <em>worker</em> means a CTA or cluster that is already running and can repeatedly claim tasks.</p>
+<p>The simplest scheduler decides every worker’s tiles in advance. With 12 tiles and four workers, a grid-stride assignment might be:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>worker 0: tile 0, 4, 8
+worker 1: tile 1, 5, 9
+worker 2: tile 2, 6, 10
+worker 3: tile 3, 7, 11
+</pre></div>
+</div>
+<p>This static assignment works well when all four workers can run together and the tiles cost roughly the same amount. In practice, a kernel cannot always know how many SMs will be available at launch time. Another kernel may already occupy part of the GPU. If worker 3 is delayed, workers 0, 1, and 2 may finish their three tiles before worker 3 even begins tiles <code class="docutils literal notranslate"><span class="pre">3,</span> <span class="pre">7,</span> <span class="pre">11</span></code>. Most workers assigned to this kernel have then exited, leaving one worker to execute a long launch tail.</p>
+<p>Tiles can also have unequal costs. Boundary handling, masks, sparse computation, or work fused around GEMM may make some tiles slower than others. A static scheduler commits to an assignment before execution begins and cannot redistribute work in response to actual completion times.</p>
+<p>CLC organizes the same 12 tiles differently. Its launch grid contains 12 CTAs with <code class="docutils literal notranslate"><span class="pre">blockIdx.x</span></code> values from 0 through 11, and CTA <code class="docutils literal notranslate"><span class="pre">i</span></code> is assigned tile <code class="docutils literal notranslate"><span class="pre">i</span></code>. Suppose resources initially permit only three CTAs to run and the scheduler starts CTAs 0, 1, and 2. CTAs 3 through 11 then remain pending in the launch queue.</p>
+<p>Suppose CTA 0 finishes tile 0. Instead of exiting, it asks the hardware for work whose launch has not begun. If the scheduler selects CTA 3, it cancels CTA 3’s launch and returns the <code class="docutils literal notranslate"><span class="pre">blockIdx</span></code> coordinate that CTA 3 would have used. CTA 0 decodes that coordinate, computes tile 3, and then asks for another task.</p>
+<p>The canceled CTA never started, so no register state or execution state has to move. Hardware gives CTA 0 only coordinate 3, which the kernel already uses as the task identifier for tile 3. This reassignment of a pending launch coordinate to a running worker is CLC work stealing.</p>
+<p>Each coordinate is therefore processed exactly once. Its CTA either launches normally, or its launch is canceled first and the coordinate is handed to an existing worker. As long as the launch queue contains a cancelable coordinate, a worker that becomes free can continue computing instead of waiting for a predetermined CTA to start.</p>
+<p>The example above schedules individual CTAs. When a kernel uses thread block clusters, CLC cancels one pending cluster launch at a time and hands its coordinate to a running cluster. Introduced with Hopper, a thread block cluster is a group of co-scheduled CTAs that can synchronize at cluster scope and access distributed shared memory within the cluster. Blackwell CLC dynamically schedules CTA or cluster coordinates; it is separate from the cluster execution model itself.</p>
+</section>
+<section id="one-clc-request">
+<h2>One CLC request<a class="headerlink" href="#one-clc-request" title="Link to this heading">#</a></h2>
+<p>Assume that a worker already owns its current tile. To request another task, one thread submits:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>clusterlaunchcontrol.try_cancel.async
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">try_cancel</span></code> asks the grid scheduler to cancel a CTA or cluster that has not begun executing. Hardware encodes the response in a 16-byte record and writes it to shared memory. A kernel normally selects one thread to submit the request. If several threads issue the instruction, they create several cancellation requests and must provide separate response locations while accounting for every request in the barrier’s arrival count and tx-count.</p>
+<p>The request is asynchronous. The worker may continue computing its current tile after issuing the instruction, but it cannot immediately read the shared-memory response. CLC uses an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> to report when all 16 bytes have been written. As with a TMA load, the issuing thread contributes one arrival and registers 16 bytes with the tx-count. The worker may query the response only after the corresponding barrier phase completes.</p>
+<p>It first checks whether the cancellation succeeded:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>clusterlaunchcontrol.query_cancel.is_canceled
+</pre></div>
+</div>
+<p>This query returns a predicate. A <code class="docutils literal notranslate"><span class="pre">true</span></code> result means that the scheduler canceled a pending launch. The worker can then execute:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>clusterlaunchcontrol.query_cancel.get_first_ctaid
+</pre></div>
+</div>
+<p>to obtain the <code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y,</span> <span class="pre">z)</span></code> coordinate of the canceled CTA, or of the first CTA in the canceled cluster. The kernel converts that coordinate into the corresponding output tile.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">false</span></code> result means that this request did not obtain a coordinate to take over. The most common reason is that the launch queue contains no pending work, although the scheduler may also be preparing to schedule a higher-priority kernel. Once a worker observes failure, it must leave the work-request loop. PTX defines a subsequent cancellation request as undefined behavior.</p>
+<p>CLC does not use a sentinel number to represent “no task.” The coordinate returned by <code class="docutils literal notranslate"><span class="pre">get_first_ctaid</span></code> is valid only when <code class="docutils literal notranslate"><span class="pre">is_canceled</span></code> returns <code class="docutils literal notranslate"><span class="pre">true</span></code>; querying the coordinate after a failed request is also undefined behavior.</p>
+<p>If the scheduling unit is a cluster with several CTAs, one request takes over the entire cluster. <code class="docutils literal notranslate"><span class="pre">get_first_ctaid</span></code> returns the coordinate of the cluster’s first CTA. Each CTA combines that coordinate with its local block index to recover its own grid coordinate.</p>
+</section>
+<section id="overlapping-the-request-with-the-current-tile">
+<h2>Overlapping the request with the current tile<a class="headerlink" href="#overlapping-the-request-with-the-current-tile" title="Link to this heading">#</a></h2>
+<p>A worker begins with the tile identified by its own <code class="docutils literal notranslate"><span class="pre">blockIdx</span></code>. Every loop iteration then follows five steps:</p>
+<ol class="arabic simple">
+<li><p>Submit <code class="docutils literal notranslate"><span class="pre">try_cancel</span></code> early to request a possible next task.</p></li>
+<li><p>Compute the current tile while the request is in flight.</p></li>
+<li><p>After the tile finishes, wait on the CLC request’s <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>.</p></li>
+<li><p>Query whether cancellation succeeded.</p></li>
+<li><p>Continue with the returned coordinate on success, or exit on failure.</p></li>
+</ol>
+<p>The pseudocode below omits barrier initialization, phase updates, and the async-proxy fences required for the response buffer. It shows only the ordering between task acquisition and computation:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>tile = decode(blockIdx)
+
+while true:
+    async_try_cancel(result, barrier)
+    compute(tile)
+    wait(barrier)
+
+    if not is_canceled(result):
+        break
+
+    tile = decode(get_first_ctaid(result))
+</pre></div>
+</div>
+<p>Why request the next task before computing the current tile? The grid scheduler needs time to process the request. If the worker waits until its current tile is finished, that latency falls directly between two tiles and leaves the worker idle.</p>
+<p>Issuing the request first allows scheduling to overlap the current tile’s computation. By the time the tile finishes, the coordinate for the next task is often already in shared memory. TMA hides data-transfer latency behind computation; CLC uses the same asynchronous pipeline idea to hide scheduling latency.</p>
+<p>CLC writes its response to shared memory through the async proxy, while an ordinary thread queries it through the generic proxy. The <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> wait confirms that the asynchronous response write has completed. Real code must also execute the PTX-required proxy fences before submitting a new request and after reading the response. These fences order accesses to the response buffer across the async and generic proxies, preventing a later asynchronous write from racing with data that is still being read. The kernel must also manage the barrier phase and the required CTA- or cluster-wide thread synchronization.</p>
+</section>
+<section id="when-to-use-clc">
+<h2>When to use CLC<a class="headerlink" href="#when-to-use-clc" title="Link to this heading">#</a></h2>
+<p>A static scheduler and CLC can share exactly the same tile computation. They differ only in how the next coordinate is obtained:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Static scheduling: derive the next coordinate from the worker ID and iteration
+CLC scheduling:    receive a pending CTA or cluster coordinate from hardware
+</pre></div>
+</div>
+<p>Static scheduling has almost no task-acquisition overhead. When SM availability is stable and tile costs are similar, a static formula is often sufficient.</p>
+<p>CLC is more useful when available resources or tile costs are difficult to predict. If other kernels occupy some SMs, or if tile execution times vary, workers that finish early can claim pending coordinates and shorten the period when only a few workers remain active at the launch tail.</p>
+<p>In TIRx, CLC can be wrapped in a dynamic tile scheduler. The GEMM mainloop and epilogue receive only the current tile coordinate; they do not need to know whether it came from a static formula or a CLC response. The computation stays unchanged while the scheduler that supplies the next coordinate is replaced.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../chapter_async_barriers/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Async Coordination: mbarrier</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../chapter_intro_tirx/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Introduction to TIRx</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-limits-of-a-static-persistent-scheduler">The limits of a static persistent scheduler</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#one-clc-request">One CLC request</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overlapping-the-request-with-the-current-tile">Overlapping the request with the current tile</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-use-clc">When to use CLC</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,856 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Debugging Warp-Specialized Kernels &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'appendix/debugging_warp_specialized';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Compiler Internals" href="../tirx_guide/arch/index.html" />
+    <link rel="prev" title="CUDA C++/PTX intrinsics" href="../tirx_guide/language_reference/cuda/threads_sync.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tma/index.html">Async Data Movement: TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tensor_cores/index.html">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tmem/index.html">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_async_barriers/index.html">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_clc/index.html">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./appendix/debugging_warp_specialized.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./appendix/debugging_warp_specialized.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fappendix/debugging_warp_specialized.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Debugging Warp-Specialized Kernels</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#before-debugging-the-kernel">Before Debugging the Kernel</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging-workflow">Debugging Workflow</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-transfers">What Transfers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#if-compilation-fails">If Compilation Fails</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-generated-code">Inspecting Generated Code</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-7-reference-skeleton">Step 7 Reference Skeleton</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#symptom-map">Symptom Map</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-restart-python">When to Restart Python</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deadlocks">Deadlocks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#crashes-and-context-poisoning">Crashes and Context Poisoning</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wrong-results">Wrong Results</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#correct-but-slow">Correct but Slow</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#filing-a-good-issue">Filing a Good Issue</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="debugging-warp-specialized-kernels">
+<span id="chap-warp-spec-debug"></span><h1>Debugging Warp-Specialized Kernels<a class="headerlink" href="#debugging-warp-specialized-kernels" title="Link to this heading">#</a></h1>
+<p>GEMM Steps 7-9 in <a class="reference internal" href="../chapter_gemm_advanced/index.html#chap-gemm-advanced"><span class="std std-ref">Scaling GEMM with Warp Specialization and Clusters</span></a> overlap TMA load, <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> MMA, and TMEM/SMEM writeback. The same debugging method applies to Flash Attention handoffs: identify the roles, identify the storage each role owns, then verify the generated CUDA against that model.</p>
+<p>Do not start by rewriting the kernel. First make sure the run is valid, then inspect the generated CUDA. After environment and compile-time issues are ruled out, runtime failures in these kernels usually reduce to a broken handoff: an uninitialized barrier, the wrong arrival count, a collective hidden inside a role guard, a stale barrier phase, or storage reused before the producer has made its writes visible.</p>
+<section id="before-debugging-the-kernel">
+<h2>Before Debugging the Kernel<a class="headerlink" href="#before-debugging-the-kernel" title="Link to this heading">#</a></h2>
+<p>Rule out the runtime context first:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import tvm, tvm.tirx; print(tvm.__file__, tvm.__version__)&quot;</span>
+python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())&quot;</span>
+</pre></div>
+</div>
+<p>These kernels target Blackwell (<code class="docutils literal notranslate"><span class="pre">sm_100a</span></code>). If Python imports a stale TVM checkout, or the GPU is not Blackwell-class, fix that before changing the kernel. Then run the kernel’s smallest correctness check, such as <code class="docutils literal notranslate"><span class="pre">run_correctness()</span></code>, before looking at performance.</p>
+</section>
+<section id="debugging-workflow">
+<h2>Debugging Workflow<a class="headerlink" href="#debugging-workflow" title="Link to this heading">#</a></h2>
+<ol class="arabic simple">
+<li><p>Reproduce the failure at the smallest shape that still fails. If the failure is an illegal memory access, restart Python before the next run.</p></li>
+<li><p>If compilation fails, check the installed API, target, <code class="docutils literal notranslate"><span class="pre">dispatch=</span></code>, and buffer scopes before reading the runtime synchronization code.</p></li>
+<li><p>Save <code class="docutils literal notranslate"><span class="pre">inspect_source(&quot;cuda&quot;)</span></code> output. Search it for role guards, <code class="docutils literal notranslate"><span class="pre">mbarrier_init</span></code>, <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code>, <code class="docutils literal notranslate"><span class="pre">cp.async.bulk.tensor</span></code>, and <code class="docutils literal notranslate"><span class="pre">cta_sync()</span></code> before reading the Python again.</p></li>
+<li><p>Write the roles / storage / handoff / lifetime table for the kernel path that failed.</p></li>
+<li><p>Check the generated CUDA against that table: barrier inits before role branches, expected TMA producer, MMA issuer(s), writeback group(s), and no CTA-wide collective inside a warpgroup-only branch.</p></li>
+<li><p>Classify the run as a deadlock, crash, wrong result, or correct-but-slow run, then use the matching section below.</p></li>
+<li><p>Change one handoff at a time: init count, arrive/wait phase, role guard, fence, TMA store drain, TMEM alloc/dealloc, or tile-scheduler advance.</p></li>
+<li><p>Re-run correctness before measuring performance.</p></li>
+</ol>
+</section>
+<section id="what-transfers">
+<h2>What Transfers<a class="headerlink" href="#what-transfers" title="Link to this heading">#</a></h2>
+<p>For any asynchronous kernel, make a small worksheet before changing code:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Item</p></th>
+<th class="head"><p>What to write down</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Roles</p></td>
+<td><p>The exact threads, warps, warpgroups, or CTAs that issue each async operation.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Storage</p></td>
+<td><p>The live location of each tile at each step: GMEM, SMEM, TMEM, or registers.</p></td>
+</tr>
+<tr class="row-even"><td><p>Handoff</p></td>
+<td><p>The producer, the consumer, the signal object, the arrival count, the phase, and the fence or drain that makes the data visible.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Lifetime</p></td>
+<td><p>The earliest point where each storage slot can be reused, read back, or freed.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Then verify the generated CUDA against the worksheet:</p>
+<ul class="simple">
+<li><p>Role guards match the roles table.</p></li>
+<li><p>Barrier inits appear before guarded role branches.</p></li>
+<li><p>Collective operations are not accidentally narrowed by lane, warp, or warpgroup guards.</p></li>
+<li><p>Arrive/wait phases match the handoff table.</p></li>
+<li><p>TMA store drains, TMEM dealloc, and SMEM reuse happen only after the lifetime table says they are legal.</p></li>
+</ul>
+<p>Use the same worksheet for TMA-&gt;MMA-&gt;writeback GEMM pipelines and for the score/softmax/value/correction handoffs in Flash Attention.</p>
+</section>
+<section id="if-compilation-fails">
+<h2>If Compilation Fails<a class="headerlink" href="#if-compilation-fails" title="Link to this heading">#</a></h2>
+<p>Fix compile-time failures before debugging runtime synchronization:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Likely area</p></th>
+<th class="head"><p>First check</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Unknown TIRx API or attribute error</p></td>
+<td><p>Installed wheel does not match the tutorial code</p></td>
+<td><p>Print <code class="docutils literal notranslate"><span class="pre">tvm.__file__</span></code> and <code class="docutils literal notranslate"><span class="pre">tvm.__version__</span></code>; compare the API name with <a class="reference internal" href="../tirx_guide/language_reference/index.html#chap-language-reference"><span class="std std-ref">TIRx Language Reference</span></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Unsupported <code class="docutils literal notranslate"><span class="pre">dispatch=</span></code></p></td>
+<td><p>The selected target or primitive does not support that path</p></td>
+<td><p>Check the <code class="docutils literal notranslate"><span class="pre">dispatch</span></code> argument and target capability; <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> paths in this tutorial require Blackwell.</p></td>
+</tr>
+<tr class="row-even"><td><p>Buffer scope mismatch</p></td>
+<td><p>A buffer is being used through the wrong hardware path</p></td>
+<td><p>Check the storage row of the worksheet: TMEM must be accessed through <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code>, and TMA operands must use compatible GMEM/SMEM layouts.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Compile succeeds but generated CUDA lacks the expected path</p></td>
+<td><p>Dispatch did not lower the way you expected</p></td>
+<td><p>Inspect the generated CUDA for <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> and <code class="docutils literal notranslate"><span class="pre">cp.async.bulk.tensor</span></code> before changing the algorithm.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="inspecting-generated-code">
+<h2>Inspecting Generated Code<a class="headerlink" href="#inspecting-generated-code" title="Link to this heading">#</a></h2>
+<p>For any compiled kernel, save the CUDA so you can search and diff it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">cuda_source</span> <span class="o">=</span> <span class="n">ex</span><span class="o">.</span><span class="n">mod</span><span class="o">.</span><span class="n">imports</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inspect_source</span><span class="p">(</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">Path</span><span class="p">(</span><span class="s2">&quot;artifacts&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">Path</span><span class="p">(</span><span class="s2">&quot;artifacts/my_kernel.cu&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">cuda_source</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">cuda_source</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The generated code maps TIRx constructs to CUDA like this:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>TIRx</p></th>
+<th class="head"><p>Generated CUDA</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wg_id</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(warp_id_in_cta</span> <span class="pre">&gt;&gt;</span> <span class="pre">2)</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">wg_id</span> <span class="pre">==</span> <span class="pre">1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(warp_id_in_cta</span> <span class="pre">&gt;&gt;</span> <span class="pre">2)</span> <span class="pre">==</span> <span class="pre">1</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">warp_id</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(warp_id_in_cta</span> <span class="pre">&amp;</span> <span class="pre">3)</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">warp_id</span> <span class="pre">==</span> <span class="pre">3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(warp_id_in_cta</span> <span class="pre">&amp;</span> <span class="pre">3)</span> <span class="pre">==</span> <span class="pre">3</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lane_id</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(((int)threadIdx.x)</span> <span class="pre">%</span> <span class="pre">32)</span> <span class="pre">==</span> <span class="pre">0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">.init()</span></code> internal guard</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">((int)threadIdx.x)</span> <span class="pre">&lt;</span> <span class="pre">1</span></code> (CTA thread 0 only)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elect_sync()</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tvm_builtin_elect_one_sync_op()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Scan for these strings before reading the full kernel:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Generated CUDA</p></th>
+<th class="head"><p>Check</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">(threadIdx.x</span> <span class="pre">&lt;</span> <span class="pre">1)</span></code></p></td>
+<td><p>Single CTA-thread guard, often barrier initialization</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mbarrier_init</span></code></p></td>
+<td><p>Barrier initialization exists and appears before role branches</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tcgen05</span></code></p></td>
+<td><p>The Tensor Core path was generated</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cp.async.bulk.tensor</span></code></p></td>
+<td><p>The copy lowered to TMA</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cta_sync();</span></code></p></td>
+<td><p>CTA-wide barrier; it must not sit inside a <code class="docutils literal notranslate"><span class="pre">wg_id</span></code> branch</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="step-7-reference-skeleton">
+<h2>Step 7 Reference Skeleton<a class="headerlink" href="#step-7-reference-skeleton" title="Link to this heading">#</a></h2>
+<p>A correctly compiled Step 7 kernel has this top-level shape. The guards below are written with role names for readability; in generated CUDA, search for the corresponding expressions from the table above.</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// (1) Barrier inits: top level, CTA thread 0 only</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">threadIdx</span><span class="p">.</span><span class="n">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">tma2mma</span><span class="p">[</span><span class="mf">0..1</span><span class="p">],</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">mma2tma</span><span class="p">[</span><span class="mf">0..1</span><span class="p">],</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">mma2ld</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">  </span><span class="n">mbarrier_init</span><span class="p">(</span><span class="n">ld2mma</span><span class="p">,</span><span class="w"> </span><span class="mi">128</span><span class="p">);</span><span class="w">   </span><span class="c1">// arrived by all 128 WG0 threads</span>
+<span class="p">}</span>
+
+<span class="c1">// (2) TMEM alloc: WG0 warp 0, all lanes of the issuing warp</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">tcgen05_alloc</span><span class="p">(...,</span><span class="w"> </span><span class="mi">512</span><span class="p">);</span>
+
+<span class="c1">// (3) Fences + cta_sync, then phase init: producer=1, consumer=0</span>
+
+<span class="c1">// (4) Warp-specialized loop</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">elect_sync</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* TMA  */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">elect_sync</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* MMA  */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wg_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w">                                </span><span class="p">{</span><span class="w"> </span><span class="cm">/* WB   */</span><span class="w"> </span><span class="k">while</span><span class="p">(</span><span class="n">valid</span><span class="p">){</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="n">next_tile</span><span class="p">();</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">// (5) Cleanup: issuing warp, no lane guard</span>
+<span class="n">cta_sync</span><span class="p">();</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">warp_id</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">tcgen05_relinquish_alloc_permit</span><span class="p">();</span><span class="w"> </span><span class="n">tcgen05_dealloc</span><span class="p">(...,</span><span class="w"> </span><span class="mi">512</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Check these before changing the algorithm:</p>
+<ul class="simple">
+<li><p>Barrier inits sit at top level, not inside a <code class="docutils literal notranslate"><span class="pre">wg_id</span></code> guard.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tcgen05_alloc</span></code> and <code class="docutils literal notranslate"><span class="pre">tcgen05_dealloc</span></code> have a warp guard but no lane guard; all lanes of the issuing warp participate.</p></li>
+<li><p>TMA and MMA loops both iterate <code class="docutils literal notranslate"><span class="pre">K_TILES</span></code> times.</p></li>
+<li><p>Phase init is producer=<code class="docutils literal notranslate"><span class="pre">1</span></code>, consumer=<code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+</ul>
+</section>
+<section id="symptom-map">
+<h2>Symptom Map<a class="headerlink" href="#symptom-map" title="Link to this heading">#</a></h2>
+<p>Start from the symptom, but treat it as a clue rather than a final diagnosis:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Clue</p></th>
+<th class="head"><p>Likely area</p></th>
+<th class="head"><p>First check</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Kernel hangs, then the runtime reports an unspecified launch failure</p></td>
+<td><p>Deadlock</p></td>
+<td><p>Barrier init placement, arrival count, <code class="docutils literal notranslate"><span class="pre">cta_sync()</span></code> placement, and <code class="docutils literal notranslate"><span class="pre">next_tile()</span></code> participation</p></td>
+</tr>
+<tr class="row-odd"><td><p>Illegal memory access, XID, or later unrelated CUDA calls also fail</p></td>
+<td><p>Crash / poisoned context</p></td>
+<td><p>Restart Python, then check pointer ranges, storage lifetime, and collective participation</p></td>
+</tr>
+<tr class="row-even"><td><p>Wrong rows appear in 128-row or tile-sized stripes</p></td>
+<td><p>Sync race or tile-index mismatch</p></td>
+<td><p>Producer/consumer phases, scheduler advance, and which warpgroup owns each row stripe</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">NaN</span></code> or obviously invalid values</p></td>
+<td><p>Descriptor, operand setup, or uninitialized accumulation</p></td>
+<td><p>SMEM/TMEM descriptor setup, swizzle/layout, and accumulator initialization</p></td>
+</tr>
+<tr class="row-even"><td><p>Finite but patterned wrong values</p></td>
+<td><p>Stale or partially visible data</p></td>
+<td><p>Missing fence, missing TMA store drain, or storage reused before the lifetime table allows it</p></td>
+</tr>
+<tr class="row-odd"><td><p>Correct output but no expected speedup</p></td>
+<td><p>Dispatch or resource issue</p></td>
+<td><p>Generated CUDA path, pipeline depth, occupancy, and register spill</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="when-to-restart-python">
+<h2>When to Restart Python<a class="headerlink" href="#when-to-restart-python" title="Link to this heading">#</a></h2>
+<p>A CUDA error does not always clean up after itself. After an illegal memory access, XID, or “CUDA context poisoned” error, later unrelated calls such as <code class="docutils literal notranslate"><span class="pre">torch.randn</span></code> may keep failing. Restart the Python process before testing the next fix, otherwise you may be debugging the previous crash instead of the current code.</p>
+</section>
+<section id="deadlocks">
+<h2>Deadlocks<a class="headerlink" href="#deadlocks" title="Link to this heading">#</a></h2>
+<p>Check these in order:</p>
+<ul>
+<li><p><strong>Arrival count does not match init count.</strong> Common case: <code class="docutils literal notranslate"><span class="pre">MBarrier.init(128)</span></code> but <code class="docutils literal notranslate"><span class="pre">arrive</span></code> is guarded by <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">warp_id</span> <span class="pre">==</span> <span class="pre">0:</span> <span class="pre">if</span> <span class="pre">lane_id</span> <span class="pre">==</span> <span class="pre">0:</span></code>, so only 1 thread arrives and the wait never returns.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Barrier</p></th>
+<th class="head"><p>init(count)</p></th>
+<th class="head"><p>Who arrives</p></th>
+<th class="head"><p>Arrivals</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TMABar</span></code> (tma-&gt;mma)</p></td>
+<td><p>1</p></td>
+<td><p>TMA engine via <code class="docutils literal notranslate"><span class="pre">arrive(stage,</span> <span class="pre">bytes)</span></code></p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TCGen05Bar</span></code> (mma-&gt;tma, mma-&gt;ld)</p></td>
+<td><p>1</p></td>
+<td><p>MMA warp via <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code></p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MBarrier</span></code> (ld-&gt;mma)</p></td>
+<td><p>128</p></td>
+<td><p>All WG0 threads via <code class="docutils literal notranslate"><span class="pre">arrive</span></code></p></td>
+<td><p>128</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</li>
+<li><p><strong>Barrier init nested inside a <code class="docutils literal notranslate"><span class="pre">wg_id</span></code> guard.</strong> <code class="docutils literal notranslate"><span class="pre">.init()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">threadIdx.x</span> <span class="pre">&lt;</span> <span class="pre">1:</span></code>, meaning CTA thread 0. CTA thread 0 lives in WG0, so <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">wg_id</span> <span class="pre">==</span> <span class="pre">1:</span></code> prevents every thread from running the init. Inits must be at top level; <code class="docutils literal notranslate"><span class="pre">grep</span> <span class="pre">mbarrier_init</span></code> in <code class="docutils literal notranslate"><span class="pre">inspect_source()</span></code> to verify.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">cta_sync()</span></code> inside a warpgroup branch.</strong> <code class="docutils literal notranslate"><span class="pre">cta_sync</span></code> is <code class="docutils literal notranslate"><span class="pre">__syncthreads()</span></code>, which requires all CTA threads. Inside <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">wg_id</span> <span class="pre">==</span> <span class="pre">0:</span></code>, WG1 never reaches it. Use <code class="docutils literal notranslate"><span class="pre">T.cuda.warpgroup_sync(10)</span></code> for a single-warpgroup barrier.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tile_scheduler.next_tile()</span></code> skipped by some consumer-warpgroup threads.</strong> The scheduler tracks per-thread state; threads that skip it can loop forever.</p></li>
+<li><p><strong>TMA and MMA disagree on K-tile count.</strong> If MMA does <code class="docutils literal notranslate"><span class="pre">K_TILES</span> <span class="pre">-</span> <span class="pre">1</span></code> instead of <code class="docutils literal notranslate"><span class="pre">K_TILES</span></code>, barrier phases drift and the second outer tile deadlocks.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">PipelineState</span></code> initial phase wrong.</strong> Producer starts at <code class="docutils literal notranslate"><span class="pre">phase=1</span></code> so the first wait passes; consumer starts at <code class="docutils literal notranslate"><span class="pre">phase=0</span></code> so the first wait blocks. If both start from the same phase, the first handoff can deadlock immediately.</p></li>
+</ul>
+</section>
+<section id="crashes-and-context-poisoning">
+<h2>Crashes and Context Poisoning<a class="headerlink" href="#crashes-and-context-poisoning" title="Link to this heading">#</a></h2>
+<p>Common causes:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">pool.alloc</span></code> after <code class="docutils literal notranslate"><span class="pre">pool.commit()</span></code>.</strong> Barrier wrappers call <code class="docutils literal notranslate"><span class="pre">alloc</span></code> internally. Correct order: <code class="docutils literal notranslate"><span class="pre">tmem_addr</span> <span class="pre">-&gt;</span> <span class="pre">barrier</span> <span class="pre">wrappers</span> <span class="pre">-&gt;</span> <span class="pre">move_base_to(1024)</span> <span class="pre">-&gt;</span> <span class="pre">Asmem</span> <span class="pre">/</span> <span class="pre">Bsmem</span> <span class="pre">/</span> <span class="pre">Dsmem</span> <span class="pre">-&gt;</span> <span class="pre">commit()</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tcgen05.alloc</span></code> or <code class="docutils literal notranslate"><span class="pre">tcgen05.dealloc</span></code> with a lane guard.</strong> The issuing warp must participate with all lanes. <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">lane_id</span> <span class="pre">==</span> <span class="pre">0:</span></code> runs one thread, which is undefined behavior.</p></li>
+<li><p><strong>Missing <code class="docutils literal notranslate"><span class="pre">cta_sync()</span></code> before <code class="docutils literal notranslate"><span class="pre">tcgen05.dealloc</span></code>.</strong> TMEM is freed while writeback is still reading.</p></li>
+<li><p><strong>Out-of-range GMEM or SMEM access.</strong> Shrink to one tile, check the scheduler’s <code class="docutils literal notranslate"><span class="pre">m_idx</span></code> / <code class="docutils literal notranslate"><span class="pre">n_idx</span></code>, and check that the current shape is a multiple of the kernel’s tile or cluster tile.</p></li>
+</ul>
+</section>
+<section id="wrong-results">
+<h2>Wrong Results<a class="headerlink" href="#wrong-results" title="Link to this heading">#</a></h2>
+<p>Classify wrong output by pattern before guessing. Whole row stripes often point to a producer/consumer phase, tile-index, or role-ownership mismatch. <code class="docutils literal notranslate"><span class="pre">NaN</span></code> output often points to descriptor setup, operand setup, or uninitialized accumulation. Finite but patterned wrong values often mean the consumer read an old tile, a partially written tile, or data whose store had not drained yet.</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code> outside <code class="docutils literal notranslate"><span class="pre">elect_sync</span></code>.</strong> All 32 threads create commit groups; the 31 empty groups signal the mbarrier immediately. TMA can overwrite SMEM before MMA reads it.</p></li>
+<li><p><strong>Missing <code class="docutils literal notranslate"><span class="pre">fence.proxy_async(&quot;shared::cta&quot;)</span></code> before TMA store.</strong> The TMA engine may not see SMEM writes from threads.</p></li>
+<li><p><strong>Missing <code class="docutils literal notranslate"><span class="pre">cp_async.bulk.commit_group()</span></code> plus <code class="docutils literal notranslate"><span class="pre">wait_group(0)</span></code> after TMA store.</strong> The next tile can reuse Dsmem before the store drains.</p></li>
+<li><p><strong>Persistent kernel fails intermittently at small sizes such as 1024x1024.</strong> Larger sizes can mask the race with longer K-loops. Re-check phase reset between tiles and the TMA-store commit/wait.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">fence.after_thread_sync()</span></code> is usually not the fix.</strong> The MMA-completion mbarrier already carries release-acquire semantics. Steps 8 and 9 add it conservatively on the writeback edge, after <code class="docutils literal notranslate"><span class="pre">mma2ld.wait</span></code> and before the first <code class="docutils literal notranslate"><span class="pre">tcgen05.ld</span></code>; do not add it routinely on the TMA-to-MMA edge.</p></li>
+</ul>
+</section>
+<section id="correct-but-slow">
+<h2>Correct but Slow<a class="headerlink" href="#correct-but-slow" title="Link to this heading">#</a></h2>
+<p>If the output is correct but performance is far below expectation, use the same inspection loop:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Clue</p></th>
+<th class="head"><p>Likely area</p></th>
+<th class="head"><p>First check</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Generated CUDA has no <code class="docutils literal notranslate"><span class="pre">cp.async.bulk.tensor</span></code></p></td>
+<td><p>Copy did not lower to TMA</p></td>
+<td><p>Check <code class="docutils literal notranslate"><span class="pre">dispatch=&quot;tma&quot;</span></code>, target capability, and operand layout</p></td>
+</tr>
+<tr class="row-odd"><td><p>Generated CUDA has no <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> path</p></td>
+<td><p>MMA did not lower to Blackwell Tensor Core instructions</p></td>
+<td><p>Check <code class="docutils literal notranslate"><span class="pre">dispatch=&quot;tcgen05&quot;</span></code>, target capability, and operand layouts</p></td>
+</tr>
+<tr class="row-even"><td><p>TMA and MMA do not overlap</p></td>
+<td><p>Pipeline too shallow or phases serialize producer/consumer</p></td>
+<td><p>Inspect the order of wait/arrive/advance in the generated CUDA</p></td>
+</tr>
+<tr class="row-odd"><td><p>Good small-shape correctness but poor large-shape speed</p></td>
+<td><p>Register spill, occupancy, or staging-buffer pressure</p></td>
+<td><p>Check the compiler resource report; reduce tile size, chunk writeback, or lower pipeline depth</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="filing-a-good-issue">
+<h2>Filing a Good Issue<a class="headerlink" href="#filing-a-good-issue" title="Link to this heading">#</a></h2>
+<p>If the failure survives the checks above, reduce it before filing an issue on the <a class="reference external" href="https://github.com/apache/tvm/issues">Apache TVM GitHub repository</a>. Include:</p>
+<ul class="simple">
+<li><p>the <code class="docutils literal notranslate"><span class="pre">tvm.__file__</span></code> / <code class="docutils literal notranslate"><span class="pre">tvm.__version__</span></code> output and GPU capability;</p></li>
+<li><p>the smallest shape that reproduces the failure;</p></li>
+<li><p>whether the failure is compile-time, deadlock, crash, wrong result, or correct-but-slow;</p></li>
+<li><p>the minimal kernel or notebook cell plus its correctness check;</p></li>
+<li><p>the saved <code class="docutils literal notranslate"><span class="pre">inspect_source(&quot;cuda&quot;)</span></code> output, or the smallest excerpt that shows the suspicious guard, barrier, or dispatch path.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../tirx_guide/language_reference/cuda/threads_sync.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">CUDA C++/PTX intrinsics</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../tirx_guide/arch/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Compiler Internals</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#before-debugging-the-kernel">Before Debugging the Kernel</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging-workflow">Debugging Workflow</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-transfers">What Transfers</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#if-compilation-fails">If Compilation Fails</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-generated-code">Inspecting Generated Code</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#step-7-reference-skeleton">Step 7 Reference Skeleton</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#symptom-map">Symptom Map</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-restart-python">When to Restart Python</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#deadlocks">Deadlocks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#crashes-and-context-poisoning">Crashes and Context Poisoning</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#wrong-results">Wrong Results</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#correct-but-slow">Correct but Slow</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#filing-a-good-issue">Filing a Good Issue</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

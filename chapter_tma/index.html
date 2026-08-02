@@ -1,0 +1,641 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Async Data Movement: TMA &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_tma/index';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Blackwell Tensor Core: tcgen05.mma" href="../chapter_tensor_cores/index.html" />
+    <link rel="prev" title="The Evolution of Tensor Core Data Layouts" href="../chapter_layout_generations/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Async Data Movement: TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tensor_cores/index.html">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tmem/index.html">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_async_barriers/index.html">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_clc/index.html">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./chapter_tma/index.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./chapter_tma/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fchapter_tma/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Async Data Movement: TMA</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-one-thread-describes-an-entire-tile">How One Thread Describes an Entire Tile</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tma-writes-a-swizzled-layout">How TMA Writes a Swizzled Layout</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#using-3d-tma-to-move-multiple-swizzle-atoms">Using 3D TMA to Move Multiple Swizzle Atoms</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-128-byte-swizzle-grouping-requirement">The 128-Byte Swizzle Grouping Requirement</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-wait-for-a-tma-load">How to Wait for a TMA Load</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-wait-for-a-tma-store">How to Wait for a TMA Store</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#putting-tma-into-a-pipeline">Putting TMA into a Pipeline</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="async-data-movement-tma">
+<span id="chap-tma"></span><h1>Async Data Movement: TMA<a class="headerlink" href="#async-data-movement-tma" title="Link to this heading">#</a></h1>
+<div class="overview admonition">
+<p class="admonition-title">Overview</p>
+<ul class="simple">
+<li><p>TMA asynchronously moves tiles between global memory and shared memory. One thread in a warp issues the operation; hardware performs the remaining address calculation and data transfer.</p></li>
+<li><p>A tensor map descriptor describes the global tensor, including its shape, strides, tile shape, and swizzle mode. The TMA instruction supplies the current tile coordinates and shared-memory address. On a load, TMA can apply the swizzle while writing shared memory, so the tile arrives in the layout expected by the later MMA.</p></li>
+<li><p>TMA loads and stores use different completion mechanisms. A load uses an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> to track the number of transferred bytes; a store uses a commit group and wait group to determine when its source buffer can be reused.</p></li>
+</ul>
+</div>
+<p>Start with the most common situation in a GEMM mainloop. While the Tensor Core computes tile <span class="math notranslate nohighlight">\(k\)</span>, the next A and B tiles must reach shared memory before the current computation finishes. If the data arrives late, the Tensor Core has to wait. The pipeline then develops a <strong>bubble</strong>, meaning a period in which the compute unit sits idle waiting for data.</p>
+<p>One way to move the tiles is to have several threads cooperate: each thread computes its global-memory and shared-memory addresses, then executes the corresponding load and store. The Tensor Memory Accelerator, or TMA, provides another path. One thread submits a tile copy, and a dedicated TMA engine performs the remaining address calculation and data transfer.</p>
+<p>TMA can also apply a swizzle as it writes shared memory, allowing the tile to arrive in the physical layout required by the later MMA. The following interactive figure shows this path. The global tensor on the left contains <code class="docutils literal notranslate"><span class="pre">16x128</span></code> <code class="docutils literal notranslate"><span class="pre">fp16</span></code> elements, and the blue rectangle selects an <code class="docutils literal notranslate"><span class="pre">8x64</span></code> tile. The right side shows how that tile is arranged after TMA writes it into shared memory. Each cell represents eight consecutive <code class="docutils literal notranslate"><span class="pre">fp16</span></code> values, or 16 bytes. Toggle the swizzle mode to compare the linear and 128-byte swizzled layouts.</p>
+<div style="overflow-x:auto;">
+<iframe src="../demo/tma_intro.html?v=tutorial-review-20260713" title="TMA: the Tensor Memory Accelerator" loading="lazy"
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Hover over any source cell on the left to see its physical destination in shared memory.</em></p>
+<section id="how-one-thread-describes-an-entire-tile">
+<h2>How One Thread Describes an Entire Tile<a class="headerlink" href="#how-one-thread-describes-an-entire-tile" title="Link to this heading">#</a></h2>
+<p>The thread that issues a TMA copy does not iterate over the elements in the tile. It only provides the hardware with two kinds of information.</p>
+<p>The first is a tensor map descriptor. It records the global tensor’s element type, shape and strides in each dimension, the tile shape for one copy, and the swizzle mode to apply when writing shared memory. The same descriptor can usually be reused across many tile copies.</p>
+<p>The second is specific to the current copy: the tile’s starting coordinates in the global tensor and its destination address in shared memory. A useful distinction is that the descriptor says “how is this tensor organized?”, while the instruction arguments say “where does this copy begin, and where should it land?”</p>
+<p>The warp still follows the SIMT execution model when the TMA instruction is issued. Only the selected thread participates in that instruction; the other threads in the warp are masked off. This lasts only until the request has been submitted. The TMA engine then moves the data asynchronously, while the issuing warp and the other warps in the CTA may continue executing. They wait for completion only before they actually use the tile.</p>
+</section>
+<section id="how-tma-writes-a-swizzled-layout">
+<h2>How TMA Writes a Swizzled Layout<a class="headerlink" href="#how-tma-writes-a-swizzled-layout" title="Link to this heading">#</a></h2>
+<p>Return to the interactive figure above and first select <code class="docutils literal notranslate"><span class="pre">None</span></code>. Each row is then written to shared memory in its original order, so logical sector <code class="docutils literal notranslate"><span class="pre">c</span></code> remains physical sector <code class="docutils literal notranslate"><span class="pre">c</span></code>.</p>
+<p>Now select <code class="docutils literal notranslate"><span class="pre">128B</span></code>. Each row in the figure contains eight 16-byte sectors, exactly 128 bytes. In this simplified, aligned example, logical sector <code class="docutils literal notranslate"><span class="pre">col</span></code> in row <code class="docutils literal notranslate"><span class="pre">row</span></code> is written to:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>physical_sector = col XOR row
+</pre></div>
+</div>
+<p>The sectors from one logical column now land at different physical positions in different rows, making a cross-row access less likely to concentrate on the same shared-memory banks. The TMA engine applies this address transformation while writing the tile; the issuing thread does not calculate each swizzled address itself.</p>
+<p>Swizzling changes the tile’s physical arrangement, not its logical contents. The TMA descriptor, the shared-memory tile layout, and the later MMA instruction must all describe the same physical arrangement (<a class="reference internal" href="../chapter_data_layout/index.html#chap-data-layout"><span class="std std-ref">Data Layout and Its Notation</span></a>). If TMA writes a 128-byte swizzle but MMA reads the data as a linear layout, the bytes have reached shared memory, but the Tensor Core will interpret them as the wrong matrix elements.</p>
+</section>
+<section id="using-3d-tma-to-move-multiple-swizzle-atoms">
+<h2>Using 3D TMA to Move Multiple Swizzle Atoms<a class="headerlink" href="#using-3d-tma-to-move-multiple-swizzle-atoms" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">SWIZZLE_128B</span></code> uses an <code class="docutils literal notranslate"><span class="pre">8</span> <span class="pre">rows</span> <span class="pre">x</span> <span class="pre">128</span> <span class="pre">bytes</span></code> repeating unit called a swizzle atom. Address remapping occurs only within an atom, so the innermost contiguous dimension of a TMA box cannot exceed 128 bytes. For <code class="docutils literal notranslate"><span class="pre">fp16</span></code>, that space holds exactly 64 elements.</p>
+<p>Now consider a <code class="docutils literal notranslate"><span class="pre">16x128</span></code> <code class="docutils literal notranslate"><span class="pre">fp16</span></code> matrix slice. Each row contains 128 <code class="docutils literal notranslate"><span class="pre">fp16</span></code> values, or 256 bytes, so the row cannot directly serve as one row of a 128-byte swizzle atom. To use <code class="docutils literal notranslate"><span class="pre">SWIZZLE_128B</span></code>, split each row into two groups of 64 <code class="docutils literal notranslate"><span class="pre">fp16</span></code> values:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>group 0: columns 0-63    = 128 bytes
+group 1: columns 64-127  = 128 bytes
+</pre></div>
+</div>
+<p>For a column coordinate <code class="docutils literal notranslate"><span class="pre">j</span></code> within the slice, define:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>group = j // 64
+col   = j % 64
+
+global[row, j] = global3[group, row, col]
+</pre></div>
+</div>
+<p>The same data now has a three-dimensional <code class="docutils literal notranslate"><span class="pre">(group=2,</span> <span class="pre">row=16,</span> <span class="pre">col=64)</span></code> view. This reshape only changes how the tensor map interprets the coordinates; it does not move the data in global memory ahead of time. After adding the <code class="docutils literal notranslate"><span class="pre">group</span></code> dimension, the innermost <code class="docutils literal notranslate"><span class="pre">col</span></code> dimension contains 64 <code class="docutils literal notranslate"><span class="pre">fp16</span></code> values and therefore satisfies the 128-byte limit.</p>
+<p>The next interactive figure draws this process. The left side is a complete <code class="docutils literal notranslate"><span class="pre">16x256</span></code> global matrix. Each cell represents one 16-byte sector, or eight <code class="docutils literal notranslate"><span class="pre">fp16</span></code> values. The blue region selects one <code class="docutils literal notranslate"><span class="pre">16x128</span></code> slice. A single 3D TMA copy writes its two groups into <code class="docutils literal notranslate"><span class="pre">g0</span></code> and <code class="docutils literal notranslate"><span class="pre">g1</span></code> on the right.</p>
+<p>Each group has 16 rows, while one swizzle atom has only eight. Both <code class="docutils literal notranslate"><span class="pre">g0</span></code> and <code class="docutils literal notranslate"><span class="pre">g1</span></code> therefore contain two atoms: rows 0-7 form the first atom, and rows 8-15 form the second. The complete slice contains four atoms. With <code class="docutils literal notranslate"><span class="pre">128B</span></code> enabled, TMA rearranges sectors inside each atom according to <code class="docutils literal notranslate"><span class="pre">physical_sector</span> <span class="pre">=</span> <span class="pre">logical_sector</span> <span class="pre">XOR</span> <span class="pre">(row</span> <span class="pre">%</span> <span class="pre">8)</span></code>.</p>
+<div style="overflow-x:auto;">
+<iframe class="demo-tma3d" src="../demo/tma_3d.html?v=tutorial-review-20260713" title="Using 3D TMA to move multiple swizzle atoms" loading="lazy"
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Toggle <code class="docutils literal notranslate"><span class="pre">Col</span> <span class="pre">offset</span></code> to select the first or second 128 columns of the original matrix. Hover over any cell in the blue region to see where its 16-byte sector lands in shared memory.</em></p>
+<section id="the-128-byte-swizzle-grouping-requirement">
+<h3>The 128-Byte Swizzle Grouping Requirement<a class="headerlink" href="#the-128-byte-swizzle-grouping-requirement" title="Link to this heading">#</a></h3>
+<p>Why split a 256-byte row into two 128-byte groups? In addition to satisfying the TMA box width limit, the grouping changes which shared-memory banks a cross-row access reaches.</p>
+<p>Consider a <code class="docutils literal notranslate"><span class="pre">16x16</span></code> grid of sectors. Each sector is 16 bytes, so one row occupies 256 bytes. Suppose we read the same sector column from eight consecutive rows, producing eight parallel 16-byte accesses.</p>
+<p>One 16-byte access spans four adjacent shared-memory banks. To make the pattern easier to inspect, the figure below groups the 32 banks into eight bank sectors, <code class="docutils literal notranslate"><span class="pre">S0</span></code> through <code class="docutils literal notranslate"><span class="pre">S7</span></code>, with four adjacent banks in each sector. If two accesses land in the same bank sector, they contend for the same group of banks.</p>
+<p>First split each row into two 128-byte groups. For a column <code class="docutils literal notranslate"><span class="pre">col</span></code> in the complete grid, <code class="docutils literal notranslate"><span class="pre">col</span> <span class="pre">//</span> <span class="pre">8</span></code> selects the left or right group and <code class="docutils literal notranslate"><span class="pre">local_col</span> <span class="pre">=</span> <span class="pre">col</span> <span class="pre">%</span> <span class="pre">8</span></code> gives the column inside that group. For rows 0-7, the swizzled bank sector is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>bank_sector = local_col XOR (row % 8)
+</pre></div>
+</div>
+<p>The eight rows produce eight different results, so these accesses can proceed in parallel.</p>
+<p>If the row remains ungrouped with a 256-byte stride, moving to the next row crosses two 128-byte units. The value used by the XOR consequently advances by two on each row:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>bank_sector = local_col XOR ((2*row + col // 8) % 8)
+</pre></div>
+</div>
+<p>This expression produces only four distinct results. Each bank sector is accessed twice, creating a 2-way conflict. The ungrouped state is included only for comparison; it is not a legal <code class="docutils literal notranslate"><span class="pre">SWIZZLE_128B</span></code> TMA box.</p>
+<p>The following interactive figure compares the two cases. Select a <code class="docutils literal notranslate"><span class="pre">Column</span></code> and eight consecutive rows in the original grid on the left. On the right, cells with black outlines show where those accesses land in the swizzled layout. With <code class="docutils literal notranslate"><span class="pre">Tiling</span></code> set to <code class="docutils literal notranslate"><span class="pre">Yes</span></code>, each row is first split into 128-byte groups <code class="docutils literal notranslate"><span class="pre">g0</span></code> and <code class="docutils literal notranslate"><span class="pre">g1</span></code>. With <code class="docutils literal notranslate"><span class="pre">Tiling</span></code> set to <code class="docutils literal notranslate"><span class="pre">No</span></code>, the figure retains the 256-byte row stride as a comparison. The <code class="docutils literal notranslate"><span class="pre">S0</span></code>-<code class="docutils literal notranslate"><span class="pre">S7</span></code> summary at the bottom shows which bank sectors the accesses use. Changing <code class="docutils literal notranslate"><span class="pre">dtype</span></code> only changes how many elements fit in a sector; it does not change the address mapping.</p>
+<div style="overflow-x:auto;">
+<iframe class="demo-tma3d" src="../demo/tiling_constraint.html?v=tutorial-review-20260713" title="How 128-byte grouping affects bank conflicts" loading="lazy"
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div>
+<script>
+(function () {
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.type !== 'demoHeight' || !d.height) return;
+    document.querySelectorAll('iframe.demo-tma3d').forEach(function (f) {
+      if (e.source === f.contentWindow) f.style.height = d.height + 'px';
+    });
+  });
+})();
+</script><p><em>Toggle tiling, then select a column and a range of eight rows to compare bank-sector use with and without grouping.</em></p>
+<p>When the tile dimensions and target access pattern allow it, choose the widest swizzle the tile can hold so that accesses spread across more banks. An <code class="docutils literal notranslate"><span class="pre">N</span></code>-byte swizzle atom requires a contiguous dimension of at least <code class="docutils literal notranslate"><span class="pre">N</span></code> bytes. If the tile cannot hold a 128-byte atom, use a 64-byte or 32-byte swizzle instead (<a class="reference internal" href="../chapter_data_layout/index.html#chap-data-layout"><span class="std std-ref">Data Layout and Its Notation</span></a>).</p>
+</section>
+</section>
+<section id="how-to-wait-for-a-tma-load">
+<h2>How to Wait for a TMA Load<a class="headerlink" href="#how-to-wait-for-a-tma-load" title="Link to this heading">#</a></h2>
+<p>A TMA load is asynchronous. Issuing the instruction only starts the transfer; the consumer cannot read the destination tile yet. TMA uses an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> for this handoff. The producer tells the barrier how many bytes to expect during the current phase, the TMA engine updates the barrier after writing those bytes, and the consumer waits for that barrier phase to complete.</p>
+<p>One phase of an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> tracks both an arrival count and a pending transaction-byte count. The phase completes only after both reach zero.</p>
+<p>Consider a concrete example. Suppose a kernel loads two operand tiles, A and B, each containing <code class="docutils literal notranslate"><span class="pre">2048</span> <span class="pre">bytes</span></code>, and associates both copies with the same <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>. The phase must wait for:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>2048 + 2048 = 4096 bytes
+</pre></div>
+</div>
+<p>Assume the barrier was initialized with an expected arrival count of 1. The issuing thread associates both TMA loads with the barrier and executes <code class="docutils literal notranslate"><span class="pre">mbarrier.arrive.expect_tx(4096)</span></code>. This performs the thread’s one arrival and sets the pending byte count to 4096:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>after expect_tx:       arrival count = 0, pending bytes = 4096
+after TMA completes:   arrival count = 0, pending bytes = 0
+</pre></div>
+</div>
+<p>As each TMA copy finishes, the engine applies a complete-tx update that subtracts the corresponding byte count. The consumer waits with <code class="docutils literal notranslate"><span class="pre">try_wait(phase)</span></code>. Only after the two copies have completed all 4096 bytes does the pending count reach zero, allowing the consumer to read the A and B tiles safely. The next figure shows this handoff in time order.</p>
+<p><img alt="TMA load synchronization: a thread issues copies and registers the byte count, the TMA engine updates the mbarrier after transferring the data, and the consumer waits for the phase to complete" src="../_images/tma_sync_flow.svg" /></p>
+</section>
+<section id="how-to-wait-for-a-tma-store">
+<h2>How to Wait for a TMA Store<a class="headerlink" href="#how-to-wait-for-a-tma-store" title="Link to this heading">#</a></h2>
+<p>A TMA store moves data in the opposite direction, from shared memory to global memory. The synchronization question changes with that direction: a load consumer needs to know when the destination tile is ready to read, whereas a store producer needs to know when the source buffer is safe to reuse.</p>
+<p>For example, suppose the epilogue has written an output tile into <code class="docutils literal notranslate"><span class="pre">Dsmem</span></code> and then starts a TMA store to write it back to <code class="docutils literal notranslate"><span class="pre">D</span></code>. The kernel cannot immediately overwrite <code class="docutils literal notranslate"><span class="pre">Dsmem</span></code>, because the TMA engine might then read data from the next iteration. The store path uses a bulk async group:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>issue one or more TMA stores
+cp.async.bulk.commit_group
+cp.async.bulk.wait_group 0
+reuse Dsmem
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">commit_group</span></code> combines the uncommitted stores issued so far into one bulk async group. <code class="docutils literal notranslate"><span class="pre">wait_group</span> <span class="pre">0</span></code> waits until all previously committed groups have completed. Only after it returns can <code class="docutils literal notranslate"><span class="pre">Dsmem</span></code> be reused safely.</p>
+<p>The two paths can therefore be distinguished as follows:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>TMA load:  consumer waits for data through an mbarrier with byte tracking
+TMA store: producer waits for source reuse through a commit group and wait group
+</pre></div>
+</div>
+</section>
+<section id="putting-tma-into-a-pipeline">
+<h2>Putting TMA into a Pipeline<a class="headerlink" href="#putting-tma-into-a-pipeline" title="Link to this heading">#</a></h2>
+<p>TMA reduces the number of copy instructions, but its larger benefit is the ability to overlap data movement with computation. With two shared-memory stages, for example:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>time t:    MMA reads stage 0    TMA fills stage 1
+time t+1:  MMA reads stage 1    TMA fills stage 0
+</pre></div>
+</div>
+<p>While the Tensor Core reads stage 0, TMA writes the next tile into stage 1. The two stages exchange roles on the next iteration. Before MMA reads a stage, it waits for the corresponding TMA load to finish. Before TMA overwrites a stage, the kernel also confirms that the previous computation no longer uses its data.</p>
+<p>TMA performs the asynchronous transfer, and the barrier hands each stage from producer to consumer. Together, they allow the time spent waiting for future data to be hidden behind computation on the current tile.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../chapter_layout_generations/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">The Evolution of Tensor Core Data Layouts</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../chapter_tensor_cores/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-one-thread-describes-an-entire-tile">How One Thread Describes an Entire Tile</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-tma-writes-a-swizzled-layout">How TMA Writes a Swizzled Layout</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#using-3d-tma-to-move-multiple-swizzle-atoms">Using 3D TMA to Move Multiple Swizzle Atoms</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-128-byte-swizzle-grouping-requirement">The 128-Byte Swizzle Grouping Requirement</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-wait-for-a-tma-load">How to Wait for a TMA Load</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-wait-for-a-tma-store">How to Wait for a TMA Store</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#putting-tma-into-a-pipeline">Putting TMA into a Pipeline</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

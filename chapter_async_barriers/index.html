@@ -1,0 +1,606 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Async Coordination: mbarrier &#8212; Modern GPU Programming For MLSys</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=3c74b3bc" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=5a4e551b" />
+    <link rel="stylesheet" type="text/css" href="../_static/demo-embed.css?v=654c0d46" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=e645c8fa"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_async_barriers/index';</script>
+    <script src="../_static/demo-embed.js?v=2d63667d"></script>
+    <link rel="icon" href="../_static/mlc-favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Advanced Scheduling: Cluster Launch Control" href="../chapter_clc/index.html" />
+    <link rel="prev" title="Tensor Memory (TMEM)" href="../chapter_tmem/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-light" alt="Modern GPU Programming For MLSys - Home"/>
+    <img src="../_static/mlc-logo-with-text-landscape.svg" class="logo__image only-dark pst-js-only" alt="Modern GPU Programming For MLSys - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_background/index.html">GPU Execution Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_performance/index.html">What Makes a Kernel Fast</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_data_layout/index.html">Data Layout and Its Notation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_layout_generations/index.html">The Evolution of Tensor Core Data Layouts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tma/index.html">Async Data Movement: TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tensor_cores/index.html">Blackwell Tensor Core: <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tmem/index.html">Tensor Memory (TMEM)</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Async Coordination: mbarrier</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_clc/index.html">Advanced Scheduling: Cluster Launch Control</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part II, TIRx Overview</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_intro_tirx/index.html">Introduction to TIRx</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_tirx_layout_api/index.html">TIRx Layout API</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part III, GEMM: Tiled to SOTA</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_basics/index.html">Building a Tiled GEMM</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_async/index.html">Pipelining GEMM with TMA</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/parser_utils.html">Parser utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/data_types.html">Data types and expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/buffers.html">Buffers and memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/control_flow.html">Control flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/blob/main/./chapter_async_barriers/index.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/edit/main/./chapter_async_barriers/index.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys/issues/new?title=Issue%20on%20page%20%2Fchapter_async_barriers/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="window.location.href='../zh/index.html'"
+  class="btn btn-sm btn-language-switch-button pst-navbar-icon"
+  title="切换到中文版"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-language"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Async Coordination: mbarrier</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mbarrier"><code class="docutils literal notranslate"><span class="pre">mbarrier</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-phases-distinguish-consecutive-uses">How phases distinguish consecutive uses</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#common-synchronization-handoffs">Common synchronization handoffs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#using-barriers-to-reuse-a-stage">Using barriers to reuse a stage</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="async-coordination-mbarrier">
+<span id="chap-async-barriers"></span><h1>Async Coordination: mbarrier<a class="headerlink" href="#async-coordination-mbarrier" title="Link to this heading">#</a></h1>
+<div class="overview admonition">
+<p class="admonition-title">Overview</p>
+<ul class="simple">
+<li><p>Issuing a TMA or Tensor Core instruction only starts an asynchronous operation. A consumer must wait for the corresponding completion signal before reading the result or reusing the resource.</p></li>
+<li><p>An <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> separates the producer’s <code class="docutils literal notranslate"><span class="pre">arrive</span></code> from the consumer’s <code class="docutils literal notranslate"><span class="pre">wait</span></code>. It combines ordinary thread arrivals with hardware completion notifications and, for TMA, also tracks bytes still in flight.</p></li>
+<li><p>A multistage pipeline typically uses a <code class="docutils literal notranslate"><span class="pre">full</span></code> barrier to signal that each stage is ready and an <code class="docutils literal notranslate"><span class="pre">empty</span></code> barrier to return its buffer. Barriers are reused through phases, so the kernel tracks phase parity to distinguish consecutive uses.</p></li>
+</ul>
+</div>
+<p>The previous chapters on TMA and the Blackwell Tensor Core introduced two kinds of asynchronous operations. In both cases, a thread issues an instruction while the hardware continues the data transfer or matrix multiply-accumulate independently. The issuing thread does not have to wait in place.</p>
+<p>Consider a TMA load. Program order can show that the TMA instruction was issued before an MMA reads the SMEM tile, but that only proves the transfer <strong>started</strong> first. It does not prove that the transfer has <strong>finished</strong>. If TMA is still writing the tile, MMA may read incomplete data. The same problem appears between <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> and the epilogue: the epilogue must not read the TMEM accumulator until the Tensor Core has finished writing it.</p>
+<p>These handoffs need an explicit completion signal. The producer reports when its work is complete, and the consumer waits for that report before using the data or reusing the resource. The hardware object that carries this signal is an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>.</p>
+<section id="mbarrier">
+<h2><code class="docutils literal notranslate"><span class="pre">mbarrier</span></code><a class="headerlink" href="#mbarrier" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> is short for memory barrier. It is a hardware synchronization object stored in shared memory, and its internal encoding is opaque. To understand its behavior, it is enough to track an arrival counter and a phase. The arrival counter says how many arrivals are still missing in the current round; the phase identifies the current round. With a parity-based wait, the kernel only tracks <code class="docutils literal notranslate"><span class="pre">phase</span> <span class="pre">%</span> <span class="pre">2</span></code>, a zero-or-one value called the phase parity. For TMA loads, the barrier also uses a tx-count to track bytes that have not yet finished transferring.</p>
+<div style="overflow-x:auto;">
+<iframe src="../demo/mbarrier_mechanism.html?v=review-20260720" title="mbarrier state and operations" loading="lazy"
+        style="width:100%; min-width:1320px; height:850px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Click any field to focus on its role in the barrier state.</em></p>
+<p>An <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> must first be initialized. During <code class="docutils literal notranslate"><span class="pre">init</span></code>, the kernel specifies how many arrivals each phase expects. The barrier starts in phase 0, with its pending arrival count set to the expected arrival count. It is now waiting for the relevant producers or resource users to report completion.</p>
+<p>Every arrival reduces the amount of work the barrier is still waiting for. Different participants in a kernel report arrival in different ways.</p>
+<p>For a TMA load, the usual path uses <code class="docutils literal notranslate"><span class="pre">mbarrier.arrive.expect_tx(bytes)</span></code>. This operation does two things. First, the issuing thread contributes one arrival, reducing the pending arrival count. Second, it adds the number of bytes that the TMA engine is expected to transfer to the tx-count.</p>
+<p>The thread’s arrival therefore does not mean that the barrier is complete. As the TMA engine finishes each transfer, hardware reports complete-tx updates that reduce the tx-count. The current phase completes only when both conditions below hold. The barrier then advances to the next phase, and its phase parity flips between 0 and 1:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>pending arrival count == 0
+tx-count              == 0
+</pre></div>
+</div>
+<p>For this reason, <code class="docutils literal notranslate"><span class="pre">expect_tx</span></code> is more than another ordinary arrival. It also registers the number of transfer bytes that the barrier must wait for. Completion requires all expected arrivals and all associated data transfers to finish.</p>
+<p>Tensor Core work follows a different arrival path. Issuing <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> alone does not update a barrier. The kernel must use <code class="docutils literal notranslate"><span class="pre">tcgen05.commit...mbarrier::arrive</span></code> to associate one barrier arrival with the previously issued asynchronous tcgen05 operations. Hardware reports that arrival only after those operations complete. Without the commit arrival, a consumer waiting for it cannot make progress.</p>
+<p>An ordinary thread can also execute <code class="docutils literal notranslate"><span class="pre">mbarrier.arrive</span></code> directly. For example, after a consumer finishes reading a shared-memory buffer, it can arrive to tell the producer that the buffer may now be overwritten and reused.</p>
+<p><code class="docutils literal notranslate"><span class="pre">wait</span></code> is the consumer side of the same protocol. A consumer waits for the phase associated with the current iteration and may read the data or reuse the protected resource only after that wait completes. Raw PTX <code class="docutils literal notranslate"><span class="pre">mbarrier.try_wait.parity</span></code> may return <code class="docutils literal notranslate"><span class="pre">false</span></code> before the phase completes and therefore has to be retried. The <code class="docutils literal notranslate"><span class="pre">T.ptx.mbarrier.try_wait</span></code> operation used in this book wraps that retry loop and blocks until the requested phase completes. Because <code class="docutils literal notranslate"><span class="pre">arrive</span></code> and <code class="docutils literal notranslate"><span class="pre">wait</span></code> are separate, a producer can report progress and continue with other work, while the consumer waits only when it actually needs the result.</p>
+<p>The common pattern is simple: asynchronous hardware runs independently and reports completion through the barrier. TMA can announce that an SMEM tile is ready, Tensor Core work can announce that a TMEM result is complete, and ordinary threads can announce that a buffer is no longer in use. In every case, the producer arrives and the consumer waits.</p>
+</section>
+<section id="how-phases-distinguish-consecutive-uses">
+<h2>How phases distinguish consecutive uses<a class="headerlink" href="#how-phases-distinguish-consecutive-uses" title="Link to this heading">#</a></h2>
+<p>The same <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> can be reused, with each round called a phase. After one phase completes, the barrier automatically enters the next phase and begins waiting for a new set of arrivals. If a consumer recorded only that the barrier had completed at some point, it could mistake the previous round’s completion for the current data being ready. Phase parity alternates between 0 and 1 so the consumer can identify the particular completion it is waiting for.</p>
+<div style="overflow-x:auto;">
+<iframe src="../demo/phase_tracking.html?v=phase-order-20260720" title="phase tracking when an mbarrier is reused" loading="lazy"
+        style="width:100%; min-width:1320px; height:640px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Select an iteration to see the phase parity alternate after each completed round.</em></p>
+<p>The figure shows one barrier alternating between phase 0 and phase 1. A two-stage TMA pipeline has two SMEM buffers, one for stage 0 and one for stage 1, and one TMA barrier for each stage. This lets the consumer wait for the two stages independently.</p>
+<p>When the pipeline visits stage 0 and stage 1 in a fixed cycle, one <code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> value can represent the current pass through the circular buffer. The parity flips after both stages have been visited:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>stage = iteration % 2
+T.ptx.mbarrier.try_wait(tma_bar.ptr_to([stage]), phase_tma)
+
+if stage == 1:
+    phase_tma ^= 1
+</pre></div>
+</div>
+<p>Both barriers start in phase 0, and <code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> also starts at 0. The first four iterations evolve as follows:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head text-right"><p>iteration</p></th>
+<th class="head text-right"><p>stage</p></th>
+<th class="head text-right"><p>phase parity waited on</p></th>
+<th class="head text-right"><p>barrier parity after completion</p></th>
+<th class="head text-right"><p><code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> after iteration</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>1</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>1</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>2</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>1</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>3</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>1</p></td>
+<td class="text-right"><p>0</p></td>
+<td class="text-right"><p>0</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Iteration 0 waits for phase 0 of stage 0. When it completes, that barrier advances to phase 1, but the current pass through the circular buffer is not finished, so <code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> remains 0. Iteration 1 waits for phase 0 of stage 1. Once both stages have been visited, <code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> flips to 1.</p>
+<p>Iteration 2 returns to stage 0 and waits for phase 1. That completion moves the stage 0 barrier back to phase 0. Iteration 3 does the same for stage 1, after which <code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> returns to 0.</p>
+<p><code class="docutils literal notranslate"><span class="pre">phase_tma</span></code> describes the software’s progress through the circular buffer. It does not assume that the two TMA transfers complete in any particular hardware order. A depth-<code class="docutils literal notranslate"><span class="pre">S</span></code> TMA pipeline therefore typically uses one TMA-completion, or <code class="docutils literal notranslate"><span class="pre">full</span></code>, barrier per stage and phase parity to distinguish consecutive uses of each stage. A complete buffer-reuse protocol adds the <code class="docutils literal notranslate"><span class="pre">empty</span></code> barriers introduced below.</p>
+</section>
+<section id="common-synchronization-handoffs">
+<h2>Common synchronization handoffs<a class="headerlink" href="#common-synchronization-handoffs" title="Link to this heading">#</a></h2>
+<p>In a Tensor Core kernel, <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> commonly coordinates three kinds of data handoff.</p>
+<p><strong>Threads to asynchronous hardware.</strong> If threads write shared memory and a later TMA store or MMA reads that memory, the kernel must first establish the required synchronization and ordering. Otherwise, the asynchronous operation may begin reading before the threads have finished writing the buffer.</p>
+<p><strong>TMA to MMA.</strong> A TMA load fills an SMEM tile asynchronously. The producer arranges for the <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code> to track both its arrival and the transfer bytes. The MMA consumer waits for the current barrier phase to complete, along with any ordering required by the instruction, before reading the tile. The timeline below shows this handoff.</p>
+<div style="overflow-x:auto;">
+<iframe src="../demo/mbarrier_tma_timeline.html?v=review-20260720" title="tracking TMA loads with an mbarrier" loading="lazy"
+        style="width:100%; min-width:1320px; height:500px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
+</div><p><em>Step through the timeline to see two 2,048-byte TMA copies complete. The barrier advances atomically to the next phase only after both the pending arrival count and tx-count reach zero, allowing the consumer’s wait to finish.</em></p>
+<p><strong>MMA to the epilogue.</strong> <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> updates a TMEM accumulator asynchronously. The thread that issues MMA uses <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code> to associate completion with an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>. The epilogue waits for that barrier and applies the ordering fence required by tcgen05 before reading the result from TMEM.</p>
+</section>
+<section id="using-barriers-to-reuse-a-stage">
+<h2>Using barriers to reuse a stage<a class="headerlink" href="#using-barriers-to-reuse-a-stage" title="Link to this heading">#</a></h2>
+<p>A barrier can mean either “data is ready” or “the buffer is no longer in use.” A pipelined kernel therefore usually gives each SMEM stage a pair of barriers: <code class="docutils literal notranslate"><span class="pre">full[stage]</span></code> means that TMA has filled the stage, while <code class="docutils literal notranslate"><span class="pre">empty[stage]</span></code> means that the consumer has finished with the buffer. Once the pipeline reaches steady state, one stage follows this cycle:</p>
+<p><img alt="The full/empty barrier protocol for one SMEM stage" src="../_images/mbarrier_stage_reuse_v2.svg" /></p>
+<p><code class="docutils literal notranslate"><span class="pre">full</span></code> hands data from producer to consumer, while <code class="docutils literal notranslate"><span class="pre">empty</span></code> returns the buffer from consumer to producer. Each barrier’s expected arrival count depends on how many threads report completion. When the pipeline reuses the same pair of barriers, it must track the phase parity of <code class="docutils literal notranslate"><span class="pre">full</span></code> and <code class="docutils literal notranslate"><span class="pre">empty</span></code> separately.</p>
+<p>When reading waits and arrivals in a pipelined kernel, first identify three things: the producer, the consumer, and the data or resource being handed off. Each wait and arrival can then be tied to a concrete event: data becoming ready, a result becoming readable, or a buffer becoming reusable.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../chapter_tmem/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Tensor Memory (TMEM)</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../chapter_clc/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Advanced Scheduling: Cluster Launch Control</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mbarrier"><code class="docutils literal notranslate"><span class="pre">mbarrier</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-phases-distinguish-consecutive-uses">How phases distinguish consecutive uses</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#common-synchronization-handoffs">Common synchronization handoffs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#using-barriers-to-reuse-a-stage">Using barriers to reuse a stage</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLC Community
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, MLC Community.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

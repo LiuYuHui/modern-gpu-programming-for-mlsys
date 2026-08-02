@@ -54,6 +54,13 @@ chapter_gemm_advanced/index
 ```
 
 ```{toctree}
+:caption: 第四部分：Flash Attention 4
+:maxdepth: 1
+
+chapter_flash_attention/index
+```
+
+```{toctree}
 :caption: 参考资料
 :maxdepth: 1
 
@@ -64,6 +71,5 @@ tirx_guide/arch/index
 ```
 
 <!--
-后续章节翻译完成后，再逐章加入上方目录。
-未发布的占位页面会在配置中排除，避免它们出现在导航和搜索中。
+核心章节已全部加入上方目录；后续新增章节继续按同样结构发布。
 -->

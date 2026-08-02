@@ -42,7 +42,6 @@ TMA 在写入 shared memory 时还可以应用 swizzle，让 tile 直接采用�
 ```text
 physical_sector = col XOR row
 ```
-*交互演示：TMA 将一个 tile 从 global memory 拷贝到 shared memory。切换 swizzle 模式，并悬停在 source cell 上，查看它会落到 shared memory 的哪个位置。*
 
 这样，同一逻辑列在不同行中的 sectors 会落到不同的物理位置，跨行访问也就不容易集中到同一组 shared-memory banks。这个地址重排由 TMA engine 在写入时完成，发起 copy 的 thread 不需要逐个计算 swizzled address。
 
@@ -95,7 +94,6 @@ global[row, j] = global3[group, row, col]
 ```text
 bank_sector = local_col XOR (row % 8)
 ```
-*交互演示：一次 3D TMA copy，以 (group, row, col) 寻址，并排布到 swizzled shared memory 中。*
 
 连续 8 行会得到 8 个不同的结果，因此这些访问可以并行完成。
 

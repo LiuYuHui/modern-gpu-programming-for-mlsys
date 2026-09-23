@@ -53,6 +53,7 @@
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'chapter_layout_generations/index';</script>
     <script src="../_static/demo-embed-zh-20260627.js?v=3a4a2ec8"></script>
+    <script src="../_static/chinese-search.js?v=6dcb01bb"></script>
     <link rel="icon" href="../_static/mlc-favicon.ico"/>
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
@@ -180,7 +181,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">参考资料</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">附录</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">概览</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx 语言参考</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -191,11 +192,14 @@
 <li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX Intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">调试 Warp-Specialized Kernel</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/benchmarking_gpu_kernels.html">GPU Kernel 性能测量与分析</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">编译器内部机制</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/ir_representation.html">TIRx IR 的组织方式</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx 编译流水线</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/tile_primitive_layout_lowering.html">Tile Primitive 与 Layout Lowering</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">调试 Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -260,7 +264,7 @@
 
 
 
-<button onclick="window.location.href='../../index.html'"
+<button onclick="window.location.href='../../chapter_layout_generations/index.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="Switch to English"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -383,13 +387,19 @@ registers --普通 store--&gt; SMEM 或 GMEM
 D_{16\times8}=A_{16\times16}B_{16\times8}+C_{16\times8}.
 \]</div>
 <p>每个 thread 的 lane ID 决定它持有 A、B、C 和 D 中的哪些元素。先从最容易观察的 C/D 累加器开始。</p>
-<p>观察 PTX 规定的映射，可以发现它每 4 个 lanes 重复一次：lanes 0–3 负责第 0 行和第 8 行，lanes 4–7 负责第 1 行和第 9 行，后面的 lanes 依次类推。因此，可以把 32 个 lanes 分成 8 个连续的 4-lane groups。记当前 lane 的 ID 为 <span class="math notranslate nohighlight">\(l\)</span>，并定义：</p>
+<p>下图展示完整 <code class="docutils literal notranslate"><span class="pre">16×8</span></code> C/D tile 在 32 个 lanes 之间的分配方式。每个 cell 中的 <code class="docutils literal notranslate"><span class="pre">L0</span></code>–<code class="docutils literal notranslate"><span class="pre">L31</span></code> 表示该元素由哪个 lane 持有；相同底色连接同一个 4-lane group 负责的两条 rows，黑框则标出 lane 5 持有的四个元素。</p>
+<p><img alt="mma.sync.m16n8k16 的 C/D register fragment 映射；32 个 lanes 每四个组成一组，每个 lane 持有两条 rows 中的一对相邻 columns" src="../_images/mma_m16n8k16_fragment.svg" /></p>
+<p>这张图可以按“先选 rows，再选 columns”分成两步理解：</p>
+<ol class="arabic simple">
+<li><p>32 个 lanes 每 4 个组成一组，共有 8 组。第 <span class="math notranslate nohighlight">\(g\)</span> 组负责 rows <span class="math notranslate nohighlight">\(g\)</span> 和 <span class="math notranslate nohighlight">\(g+8\)</span>。</p></li>
+<li><p>组内的 4 个 lanes 再分配这两条 rows 的 8 个 columns。组内第 <span class="math notranslate nohighlight">\(t\)</span> 个 lane 负责 columns <span class="math notranslate nohighlight">\(2t\)</span> 和 <span class="math notranslate nohighlight">\(2t+1\)</span>。</p></li>
+</ol>
+<p>记当前 lane 的 ID 为 <span class="math notranslate nohighlight">\(l\)</span>。它所属的 group 以及在 group 内的位置分别为：</p>
 <div class="math notranslate nohighlight">
 \[
 g=l\mathbin{//}4,\qquad t=l\bmod 4.
 \]</div>
-<p>整数除法得到 group 编号 <span class="math notranslate nohighlight">\(g\)</span>，取余得到 lane 在 group 内的位置 <span class="math notranslate nohighlight">\(t\)</span>。</p>
-<p>第 <span class="math notranslate nohighlight">\(g\)</span> 个 group 共同负责输出 tile 的第 <span class="math notranslate nohighlight">\(g\)</span> 行和第 <span class="math notranslate nohighlight">\(g+8\)</span> 行。group 内第 <span class="math notranslate nohighlight">\(t\)</span> 个 lane 负责这两行中的第 <span class="math notranslate nohighlight">\(2t\)</span> 列和第 <span class="math notranslate nohighlight">\(2t+1\)</span> 列。因此，每个 lane 持有四个 <code class="docutils literal notranslate"><span class="pre">fp32</span></code> 累加值，其逻辑坐标为：</p>
+<p>因此，每个 lane 持有四个 <code class="docutils literal notranslate"><span class="pre">fp32</span></code> 累加值，其逻辑坐标为：</p>
 <div class="math notranslate nohighlight">
 \[
 (g,2t),\qquad
@@ -397,7 +407,7 @@ g=l\mathbin{//}4,\qquad t=l\bmod 4.
 (g+8,2t),\qquad
 (g+8,2t+1).
 \]</div>
-<p>例如，lane 5 对应：</p>
+<p>图中以 lane 5 为例。此时：</p>
 <div class="math notranslate nohighlight">
 \[
 g=5\mathbin{//}4=1,\qquad t=5\bmod4=1,
@@ -560,7 +570,7 @@ SFA, SFB: GMEM --TMA--&gt; SMEM --tcgen05.cp--&gt; TMEM --tcgen05.mma--&gt; Tens
 </pre></div>
 </div>
 <p>其中，<code class="docutils literal notranslate"><span class="pre">S[...]</span></code> 把 <code class="docutils literal notranslate"><span class="pre">(Mgroup,</span> <span class="pre">lane,</span> <span class="pre">sfk)</span></code> 映射到 TMEM 中的 byte 位置。在带有数据类型的 TIRx layout 中，<code class="docutils literal notranslate"><span class="pre">&#64;TCol</span></code> stride 以 buffer element 为单位。这里每个 scale factor 占 8 bits，因此逻辑 TCol 位置为 <code class="docutils literal notranslate"><span class="pre">4*Mgroup+sfk</span></code>；每四个连续位置打包进一个 32-bit hardware TCol cell。等价地，<code class="docutils literal notranslate"><span class="pre">hardware_TCol=(4*Mgroup+sfk)//4</span></code>，<code class="docutils literal notranslate"><span class="pre">byte_in_word=(4*Mgroup+sfk)%4</span></code>。</p>
-<p><code class="docutils literal notranslate"><span class="pre">R[...]</span></code> 表示沿 <code class="docutils literal notranslate"><span class="pre">TLane</span></code> 轴复制四份。<code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> 的 <code class="docutils literal notranslate"><span class="pre">.32x128b.warpx4</span></code> 形式正好完成这件事：先写入一个 32-lane window，再把同一份数据广播到另外三个 warp windows。</p>
+<p><code class="docutils literal notranslate"><span class="pre">R[...]</span></code> 表示沿 <code class="docutils literal notranslate"><span class="pre">TLane</span></code> 轴复制四份。<code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> 的 <code class="docutils literal notranslate"><span class="pre">.32x128b.warpx4</span></code> 形式会把同一个基础 tile multicast 到四个 32-lane warp windows，从而得到这一布局。</p>
 </section>
 <section id="scale-vec-word">
 <h3><code class="docutils literal notranslate"><span class="pre">scale_vec</span></code> 的 Word 内复制<a class="headerlink" href="#scale-vec-word" title="Link to this heading">#</a></h3>

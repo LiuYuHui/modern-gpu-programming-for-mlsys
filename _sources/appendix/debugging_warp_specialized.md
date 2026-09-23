@@ -1,9 +1,9 @@
 (chap_warp_spec_debug)=
 # Debugging Warp-Specialized Kernels
 
-GEMM Steps 7-9 in {ref}`chap_gemm_advanced` overlap TMA load, `tcgen05` MMA, and TMEM/SMEM writeback. The same debugging method applies to Flash Attention handoffs: identify the roles, identify the storage each role owns, then verify the generated CUDA against that model.
+GEMM Steps 7–9 in {ref}`chap_gemm_advanced` overlap TMA load, `tcgen05` MMA, and TMEM/SMEM writeback. The same debugging method applies to the handoffs among QKᵀ MMA, softmax, PV MMA, and correction in Flash Attention: identify the roles and the storage each role owns, then verify the generated CUDA against that model.
 
-Do not start by rewriting the kernel. First make sure the run is valid, then inspect the generated CUDA. After environment and compile-time issues are ruled out, runtime failures in these kernels usually reduce to a broken handoff: an uninitialized barrier, the wrong arrival count, a collective hidden inside a role guard, a stale barrier phase, or storage reused before the producer has made its writes visible.
+Do not start by rewriting the kernel. First verify the environment and reproduce the failure with the smallest correctness test, then inspect the generated CUDA. After environment and compile-time issues are ruled out, runtime failures in these kernels usually reduce to a broken handoff: an uninitialized barrier, the wrong arrival count, a collective hidden inside a role guard, a stale barrier phase, or storage reused before the producer has made its writes visible.
 
 ## Before Debugging the Kernel
 
@@ -20,14 +20,14 @@ These kernels target Blackwell (`sm_100a`). If Python imports a stale TVM checko
 
 1. Reproduce the failure at the smallest shape that still fails. If the failure is an illegal memory access, restart Python before the next run.
 2. If compilation fails, check the installed API, target, `dispatch=`, and buffer scopes before reading the runtime synchronization code.
-3. Save `inspect_source("cuda")` output. Search it for role guards, `mbarrier_init`, `tcgen05`, `cp.async.bulk.tensor`, and `cta_sync()` before reading the Python again.
+3. Save `inspect_source("cuda")` output. Search it for role guards, `mbarrier_init`, `tcgen05`, `cp.async.bulk.tensor`, and `__syncthreads()` before reading the Python again.
 4. Write the roles / storage / handoff / lifetime table for the kernel path that failed.
 5. Check the generated CUDA against that table: barrier inits before role branches, expected TMA producer, MMA issuer(s), writeback group(s), and no CTA-wide collective inside a warpgroup-only branch.
 6. Classify the run as a deadlock, crash, wrong result, or correct-but-slow run, then use the matching section below.
 7. Change one handoff at a time: init count, arrive/wait phase, role guard, fence, TMA store drain, TMEM alloc/dealloc, or tile-scheduler advance.
 8. Re-run correctness before measuring performance.
 
-## What Transfers
+## Map the Data Handoffs
 
 For any asynchronous kernel, make a small worksheet before changing code:
 
@@ -44,15 +44,15 @@ Then verify the generated CUDA against the worksheet:
 - Barrier inits appear before guarded role branches.
 - Collective operations are not accidentally narrowed by lane, warp, or warpgroup guards.
 - Arrive/wait phases match the handoff table.
-- TMA store drains, TMEM dealloc, and SMEM reuse happen only after the lifetime table says they are legal.
+- TMA store completion is awaited, TMEM is deallocated, and SMEM is reused only when the lifetime table says each action is safe.
 
-Use the same worksheet for TMA->MMA->writeback GEMM pipelines and for the score/softmax/value/correction handoffs in Flash Attention.
+Use the same worksheet for TMA → MMA → writeback GEMM pipelines and for the handoffs among QKᵀ MMA, softmax, PV MMA, and correction in Flash Attention.
 
 ## If Compilation Fails
 
 Fix compile-time failures before debugging runtime synchronization:
 
-| Symptom | Likely area | First check |
+| Symptom | Likely cause | First check |
 |---|---|---|
 | Unknown TIRx API or attribute error | Installed wheel does not match the tutorial code | Print `tvm.__file__` and `tvm.__version__`; compare the API name with {ref}`chap_language_reference`. |
 | Unsupported `dispatch=` | The selected target or primitive does not support that path | Check the `dispatch` argument and target capability; `tcgen05` paths in this tutorial require Blackwell. |
@@ -92,13 +92,13 @@ Scan for these strings before reading the full kernel:
 | `mbarrier_init` | Barrier initialization exists and appears before role branches |
 | `tcgen05` | The Tensor Core path was generated |
 | `cp.async.bulk.tensor` | The copy lowered to TMA |
-| `cta_sync();` | CTA-wide barrier; it must not sit inside a `wg_id` branch |
+| `__syncthreads();` | CTA-wide barrier generated from `T.cuda.cta_sync()`; it must not sit inside a `wg_id` branch |
 
 ## Step 7 Reference Skeleton
 
 A correctly compiled Step 7 kernel has this top-level shape. The guards below are written with role names for readability; in generated CUDA, search for the corresponding expressions from the table above.
 
-```c
+```text
 // (1) Barrier inits: top level, CTA thread 0 only
 if (threadIdx.x < 1) {
   mbarrier_init(tma2mma[0..1], 1);
@@ -110,7 +110,7 @@ if (threadIdx.x < 1) {
 // (2) TMEM alloc: WG0 warp 0, all lanes of the issuing warp
 if (wg_id == 0 && warp_id == 0) tcgen05_alloc(..., 512);
 
-// (3) Fences + cta_sync, then phase init: producer=1, consumer=0
+// (3) Fences + __syncthreads, then phase init: producer=1, consumer=0
 
 // (4) Warp-specialized loop
 if (wg_id == 1 && warp_id == 3 && elect_sync) { /* TMA  */ while(valid){ ... next_tile(); } }
@@ -118,7 +118,7 @@ if (wg_id == 1 && warp_id == 0 && elect_sync) { /* MMA  */ while(valid){ ... nex
 if (wg_id == 0)                                { /* WB   */ while(valid){ ... next_tile(); } }
 
 // (5) Cleanup: issuing warp, no lane guard
-cta_sync();
+__syncthreads();
 if (warp_id == 0) { tcgen05_relinquish_alloc_permit(); tcgen05_dealloc(..., 512); }
 ```
 
@@ -133,7 +133,7 @@ Check these before changing the algorithm:
 
 Start from the symptom, but treat it as a clue rather than a final diagnosis:
 
-| Clue | Likely area | First check |
+| Clue | Likely cause | First check |
 |---|---|---|
 | Kernel hangs, then the runtime reports an unspecified launch failure | Deadlock | Barrier init placement, arrival count, `cta_sync()` placement, and `next_tile()` participation |
 | Illegal memory access, XID, or later unrelated CUDA calls also fail | Crash / poisoned context | Restart Python, then check pointer ranges, storage lifetime, and collective participation |
@@ -152,10 +152,10 @@ Check these in order:
 
 - **Arrival count does not match init count.** Common case: `MBarrier.init(128)` but `arrive` is guarded by `if warp_id == 0: if lane_id == 0:`, so only 1 thread arrives and the wait never returns.
 
-  | Barrier | init(count) | Who arrives | Arrivals |
+  | Barrier | init(count) | How completion is reported | Arrivals |
   |---|---|---|---|
-  | `TMABar` (tma->mma) | 1 | TMA engine via `arrive(stage, bytes)` | 1 |
-  | `TCGen05Bar` (mma->tma, mma->ld) | 1 | MMA warp via `tcgen05.commit` | 1 |
+  | `TMABar` (tma->mma) | 1 | The selected producer thread calls `arrive(stage, bytes)`; the TMA engine later completes the byte count | 1 |
+  | `TCGen05Bar` (mma->tma, mma->ld) | 1 | The selected MMA thread calls `tcgen05.commit`; hardware reports the arrival when the MMA completes | 1 |
   | `MBarrier` (ld->mma) | 128 | All WG0 threads via `arrive` | 128 |
 
 - **Barrier init nested inside a `wg_id` guard.** `.init()` lowers to `if threadIdx.x < 1:`, meaning CTA thread 0. CTA thread 0 lives in WG0, so `if wg_id == 1:` prevents every thread from running the init. Inits must be at top level; `grep mbarrier_init` in `inspect_source()` to verify.
@@ -185,15 +185,15 @@ Classify wrong output by pattern before guessing. Whole row stripes often point 
 - **Missing `fence.proxy_async("shared::cta")` before TMA store.** The TMA engine may not see SMEM writes from threads.
 - **Missing `cp_async.bulk.commit_group()` plus `wait_group(0)` after TMA store.** The next tile can reuse Dsmem before the store drains.
 - **Persistent kernel fails intermittently at small sizes such as 1024x1024.** Larger sizes can mask the race with longer K-loops. Re-check phase reset between tiles and the TMA-store commit/wait.
-- **`fence.after_thread_sync()` is usually not the fix.** The MMA-completion mbarrier already carries release-acquire semantics. Steps 8 and 9 add it conservatively on the writeback edge, after `mma2ld.wait` and before the first `tcgen05.ld`; do not add it routinely on the TMA-to-MMA edge.
+- **Missing `fence.after_thread_sync()` between MMA completion and TMEM load.** The `mma2ld` wait confirms that the MMA has completed, but a writeback thread still needs `T.ptx.tcgen05.fence.after_thread_sync()` before issuing `tcgen05.ld`. This orders the new thread's TMEM load after the cross-thread completion notification. Steps 7–9 place the fence immediately after `mma2ld.wait`. This is a `tcgen05` ordering rule; it does not wait for a TMA load or make ordinary thread writes visible to the TMA engine. Those handoffs use their own mbarrier and proxy-fence protocols.
 
 ## Correct but Slow
 
 If the output is correct but performance is far below expectation, use the same inspection loop:
 
-| Clue | Likely area | First check |
+| Clue | Likely cause | First check |
 |---|---|---|
-| Generated CUDA has no `cp.async.bulk.tensor` | Copy did not lower to TMA | Check `dispatch="tma"`, target capability, and operand layout |
+| Generated CUDA has no `cp.async.bulk.tensor` | Copy did not lower to TMA | Check `dispatch="tma_auto"`, target capability, and operand layout |
 | Generated CUDA has no `tcgen05` path | MMA did not lower to Blackwell Tensor Core instructions | Check `dispatch="tcgen05"`, target capability, and operand layouts |
 | TMA and MMA do not overlap | Pipeline too shallow or phases serialize producer/consumer | Inspect the order of wait/arrive/advance in the generated CUDA |
 | Good small-shape correctness but poor large-shape speed | Register spill, occupancy, or staging-buffer pressure | Check the compiler resource report; reduce tile size, chunk writeback, or lower pipeline depth |

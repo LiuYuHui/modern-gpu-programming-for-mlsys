@@ -20,9 +20,11 @@
 编译器内部机制
 ==============
 
-本节面向 TIRx 贡献者，介绍编译器内部的工作方式。
+本节先说明 TIRx IR 怎样组织函数体、buffer、layout 和执行层级，再沿编译流水线观察这些信息怎样变成 CPU 端的启动函数和 GPU 端的 device code。
 
 .. toctree::
    :maxdepth: 1
 
+   ir_representation
    lowering_pipeline
+   tile_primitive_layout_lowering

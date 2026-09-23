@@ -29,17 +29,19 @@ Parameter buffer 通过 ``T.match_buffer`` 绑定，kernel body 中的临时 buf
 创建 buffer 的两个基本 API 是：
 
 - ``T.alloc_buffer(shape, dtype, scope=..., ...)``：**分配新的 storage**，
-  生成一个 ``AllocBuffer`` node，并返回对应的 ``Buffer``。
+  生成一个 ``AllocBuffer`` node，并返回 buffer value，也就是 type 为
+  ``BufferType`` 的 ``Var``。
   ``T.alloc_shared`` 和 ``T.alloc_local`` 分别是
   ``scope="shared"`` 和 ``scope="local"`` 的简写。
 - ``T.decl_buffer(shape, dtype, data=..., ...)``：在已有 pointer ``data``
   上**声明一个 view**，不会分配 storage。它可以为 pool 的一段区域或
   tensor-memory address 创建 alias，也可以重新解释已有 storage。
-  ``data=None`` 时，它和 ``alloc_buffer`` 一样会分配 storage。
+  普通 scope 中 ``data=None`` 时，它和 ``alloc_buffer`` 一样会分配 storage；
+  tensor memory 是例外，使用后文介绍的 ``allocated_addr``。
 
-Buffer 的 ``data`` pointer 是 immutable ``Var``：``alloc_buffer`` 创建它，
-``decl_buffer`` 接收它。如果已有的是 pointer 表达式，需要先将表达式绑定为
-``Var``，详见 :doc:`data_types`。
+Buffer 的 ``data`` property 是 immutable、带类型的 pointer ``Expr``，不一定
+是 ``Var``。``decl_buffer`` 可以直接接收类型兼容的 pointer 表达式，详见
+:doc:`data_types`。
 
 两种 API 使用同一个 buffer descriptor，主要参数如下：
 
@@ -99,7 +101,7 @@ Buffer 的 ``data`` pointer 是 immutable ``Var``：``alloc_buffer`` 创建它�
 
 ::
 
-    addr(buffer[coord]) = buffer.data + elem_offset + layout.apply(coord, shape=shape)["m"]
+    addr(buffer[coord]) = buffer.data + elem_offset + layout.apply(*coord, shape=shape)["m"]
 
 ``layout.apply`` 返回各个 physical axis 的映射，其中 ``"m"`` 分量是 element
 offset。因此，同一个逻辑访问会因为 buffer metadata 不同而生成不同的地址
@@ -108,7 +110,7 @@ offset。因此，同一个逻辑访问会因为 buffer metadata 不同而生成
 
 .. code-block:: python
 
-    from tvm.tirx.layout import TileLayout, S
+    from tvm.tirx.layout import TileLayout, S, laneid
 
     B = T.match_buffer(p, (4, 8), "float32")                                       # row-major
     B = T.match_buffer(p, (4, 8), "float32", layout=TileLayout(S[(4, 8):(1, 4)]))  # column-major
@@ -208,12 +210,12 @@ dynamic shared memory allocation。Static shared memory 的大小在编译期
    ``"tirx.use_dyn_shared_memory"`` tag。Host launcher 计算总 byte 数，并将
    它作为最后一个 launch argument：
 
-   .. code-block:: python
+   .. code-block:: text
 
-       # device kernel attribute:
+       # device kernel 属性：
        "tirx.kernel_launch_params": ["blockIdx.x", "threadIdx.x", "tirx.use_dyn_shared_memory"]
 
-       # host-side launch call  (..., gridDim.x, blockDim.x, dyn_shared_bytes):
+       # host 侧 launch 调用（..., gridDim.x, blockDim.x, dyn_shared_bytes）：
        T.call_packed("dyn_kernel", A.data, B.data, C.data, 1, 64, 512)
 
    运行时，这里的 ``512`` 会成为 ``cuLaunchKernelEx`` 调用中的
@@ -225,33 +227,34 @@ SMEMPool
 
 ``T.SMEMPool`` 自动管理 arena。它使用 bump allocation 计算 offset，因此
 不需要手工 ``decl`` 每个 view。除了 ``alloc`` 和 ``commit``，它还支持
-per-buffer ``align=``、创建 MMA-compatible swizzle layout 的 ``alloc_mma``
+per-buffer ``align=``、创建 MMA-compatible swizzle layout 的 ``alloc_tcgen05_mma_AB``
 helper，以及将 cursor 回退以复用空间的 ``move_base_to``：
 
 .. code-block:: python
 
-    pool = T.SMEMPool()                          # bump allocator over shared.dyn
-    As = pool.alloc((BM, BK), "float16", align=128)   # carve a tile
+    pool = T.SMEMPool()                          # shared.dyn 上的 bump allocator
+    As = pool.alloc((BM, BK), "float16", align=128)   # 分配一个 tile
     Bs = pool.alloc((BK, BN), "float16", align=128)
-    Cs = pool.alloc_mma((BM, BN), "float16")     # MMA-compatible, swizzle inferred
-    pool.commit()                                 # finalize the pool's size
-    # pool.move_base_to(offset) rewinds the cursor to reuse space
+    Cs = pool.alloc_tcgen05_mma_AB((BM, BN), "float16")  # 自动推导 MMA-compatible swizzle
+    pool.commit()                                 # 确定 pool 的最终大小
+    # pool.move_base_to(offset) 将 cursor 回退到可复用的位置
 
 下方的 TMEM pool 建立在 ``SMEMPool`` 之上。
 
 Registers
 ---------
 
-Per-thread 临时数据位于 registers 中。使用
-``T.alloc_local(shape, dtype)``（即 ``scope="local"``）分配；它只属于当前
-thread，并会生成保存在 registers 中的 local array。
+Per-thread 临时数据使用 ``local`` scope。通过
+``T.alloc_local(shape, dtype)`` 分配后，这些数据只属于当前 thread。使用
+静态索引的 local arrays 通常会被 scalarize 到 registers；使用动态索引，或
+register pressure 较高时，也可能进入 local memory。
 
 .. code-block:: python
 
-    r = T.alloc_local((4,), "float32")   # per-thread register array
+    r = T.alloc_local((4,), "float32")   # 每个 thread 私有的 register array
     for k in T.unroll(4):
         r[k] = A[tx, k]
-    # ... compute on r[0..3] ...
+    # ... 使用 r[0..3] 计算 ...
 
 .. code-block:: c++
 
@@ -281,7 +284,7 @@ Scalar 本质上是只有**一个元素**的 register array。可以直接分配
 
 .. code-block:: python
 
-    phase = T.alloc_local((1,), "int32")   # 1-element register array
+    phase = T.alloc_local((1,), "int32")   # 单元素 register array
     phase[0] = 0
     while phase[0] < 4:
         acc = acc + A[tx, phase[0]]
@@ -292,47 +295,48 @@ Scalar 本质上是只有**一个元素**的 register array。可以直接分配
 
 .. code-block:: python
 
-    phase: T.int32 = 0                 # mutable scalar (sugar for the above)
+    phase: T.int32 = 0                 # mutable scalar，是上一种写法的语法糖
     while phase < 4:
         acc = acc + A[tx, phase]
         phase += 1
 
-    s = T.local_scalar("int32")        # explicit form; assign by name (s = ..., not s[0])
-    acc: T.float32 = 0.0               # a type-annotated assignment also makes one
+    s = T.local_scalar("int32")        # 显式形式；通过名称赋值，而不是 s[0]
+    acc: T.float32 = 0.0               # 带类型注解的赋值也会创建 scalar
 
 两种写法在 parse 后会得到结构完全相同的 TIRx。Parser 会将
 ``phase: T.int32`` 解析为单元素 ``local`` buffer，将 ``phase`` 和
 ``phase += 1`` 解析为 ``phase[0]`` 和 ``phase[0] += 1``。对两个 kernels
 调用 ``tvm.ir.assert_structural_equal`` 会通过；printer 甚至会把显式的
 ``alloc_local`` 加 ``[0]`` 重新输出为 scalar 语法。因此，parse 完成后两者
-没有区别，都会 lowering 为 ``alignas(64) int phase_ptr[1];``。Scalar
+没有区别，都会生成 ``alignas(64) int phase_ptr[1];``。Scalar
 只是省去了 ``[0]``。``T.local_scalar``、``T.shared_scalar`` 和
 ``T.alloc_scalar`` 可以显式选择 scope。
 
 .. note::
 
-   **为什么不使用** ``Var`` **？** TIRx ``Var`` 是 immutable 的静态绑定，
-   与下面的 ``T.let`` 相同。Scalar 必须是 mutable 的，例如在 loop 或
-   accumulator 中重复赋值，因此需要由能够反复 store 的单元素 buffer
-   支撑，不能使用 ``Var``。
+   **为什么不使用 scalar-typed** ``Var`` **？** Typed TIRx 中两种形式都
+   具有 ``Var`` identity。Buffer value 是带 ``BufferType`` 的 ``Var``；store
+   修改的是 buffer contents，并不会重新绑定该 ``Var``。下方 ``T.let``
+   创建的则是只有一次 immutable binding 的 scalar-typed ``Var``。因此
+   mutable scalar 必须由可反复 store contents 的单元素 buffer 支撑。
 
 ``let``
 ~~~~~~~
 
-``T.let`` 是 **immutable** binding，对应一个 ``LetStmt``。它表示命名后的
+``T.let`` 是 **immutable** binding，对应一个 ``Bind`` node。它表示命名后的
 值，不是 buffer，适合保存派生常量：
 
 .. code-block:: python
 
-    n: T.let = M * K               # immutable binding (LetStmt)
-    half: T.let[T.int32] = N // 2  # ... with an explicit type
+    n: T.let = M * K               # immutable binding（Bind）
+    half: T.let[T.int32] = N // 2  # 显式指定类型
 
 它会生成普通的 C scalar variable，而不是 array，也不需要 ``[0]``。例如，
 运行时变量 ``m`` 上的 ``half: T.let = m * 2`` 会生成：
 
 .. code-block:: c++
 
-    int half = m * 2;     // the `let` -> a const-like local
+    int half = m * 2;     // `let` 生成类似 const 的 local variable
 
 由于值不会改变，simplifier 可以自由执行 propagation 和 common
 subexpression elimination。因此在使用位置可能直接看到 ``m * 2``，也可能
@@ -341,7 +345,7 @@ subexpression elimination。因此在使用位置可能直接看到 ``m * 2``，
 .. note::
 
    **为什么需要 immutable binding？** 因为值不会改变，arithmetic analyzer
-   在简化 ``LetStmt`` 时可以调用 ``analyzer.Bind(var, value)``，将关于这个
+   在简化 ``Bind`` 时内部可以调用 ``arith::Analyzer::Bind``，将关于这个
    值的结论传播到所有使用位置，包括 constant bounds、表示 divisibility 和
    alignment 的 modular set，以及 ranges。这些信息可用于简化 index、
    消除 bounds check，以及决定 alignment 和 vectorization。Mutable scalar
@@ -368,15 +372,15 @@ offset 上 ``decl`` tensor views，结束时由一个 warp 释放：
 
 .. code-block:: python
 
-    addr = T.alloc_shared((1,), "uint32")             # slot for the allocated base
-    if warp_id == alloc_warp:                         # tcgen05.alloc is warp-uniform
+    addr = T.alloc_shared((1,), "uint32")             # 保存 allocation base 的 slot
+    if warp_id == alloc_warp:                         # tcgen05.alloc 是 warp-uniform
         T.ptx.tcgen05.alloc(T.address_of(addr), n_cols=512, cta_group=cta_group)
     acc = T.decl_buffer((CTA_M, 512), "float32", scope="tmem",
-                        allocated_addr=0, layout=tmem_layout)   # view at column 0
-    # ... use acc as a gemm_async / copy_async operand ...
+                        allocated_addr=0, layout=tmem_layout)   # column 0 处的 view
+    # ... 将 acc 用作 gemm_async / copy_async operand ...
     if warp_id == alloc_warp:
         T.ptx.tcgen05.relinquish_alloc_permit(cta_group=cta_group)
-        T.ptx.tcgen05.dealloc(addr, n_cols=512, cta_group=cta_group)
+        T.ptx.tcgen05.dealloc(addr[0], n_cols=512, cta_group=cta_group)
 
 此时 column offsets 和 ``tmem_layout`` （datapath D/F layout）都需要手工
 管理。下面的 pool 会自动生成同样的步骤。
@@ -389,13 +393,13 @@ datapath layout：
 
 .. code-block:: python
 
-    tmem_addr = pool.alloc((1,), "uint32")          # pool = the kernel's smem pool
+    tmem_addr = pool.alloc((1,), "uint32")          # pool 是 kernel 的 SMEM pool
     tmem_pool = T.TMEMPool(pool, total_cols=512, cta_group=cta_group,
                            tmem_addr=tmem_addr)
-    acc = tmem_pool.alloc((CTA_M, 512), "float32")  # allocated_addr set for you
-    tmem_pool.commit()                               # emits tcgen05.alloc (one warp)
-    # ... use acc ...
-    tmem_pool.dealloc()                              # emits tcgen05.dealloc (one warp)
+    acc = tmem_pool.alloc((CTA_M, 512), "float32")  # 自动设置 allocated_addr
+    tmem_pool.commit()                               # 由一个 warp 发出 tcgen05.alloc
+    # ... 使用 acc ...
+    tmem_pool.dealloc()                              # 由一个 warp 发出 tcgen05.dealloc
 
 完整示例见第三部分的 GEMM kernels。
 
@@ -413,7 +417,7 @@ pointer，本身不会生成运行时操作。常用 methods 如下：
    * - Method
      - 作用
    * - ``B.data``
-     - 原始 data pointer（``Var``），输出为 ``B_ptr``
+     - 带类型的 base-pointer 表达式，输出为 ``B_ptr``
    * - ``B.ptr_to([i, j])``
      - 指向某个元素的 typed pointer（``address_of``），输出为 ``&B_ptr[…]``
    * - ``B.vload([i], dtype="float32x4")`` / ``B.vstore([i], v)``
@@ -451,12 +455,12 @@ intrinsic 或 inline function；``data`` 则是 base pointer：
 
 **Reshape / reinterpret：``view`` / ``permute``。** 两者都只修改 metadata，
 data pointer 保持不变，变化的是 index arithmetic。``A.view(64, 4)`` 将包含
-256 个元素的 buffer 看作 ``64×4``；``A.permute(1, 0)`` 交换两个 axes：
+256 个元素的 buffer 看作 ``64×4``；``A2.permute(1, 0)`` 交换这两个 axes：
 
 .. code-block:: python
 
     A2 = A.view(64, 4);     y = A2[tx, 0] + A2[tx, 3]   # A2[tx, j] -> A_ptr[tx*4 + j]
-    At = A.permute(1, 0);   z = At[i, j]                # At[i, j]  -> A_ptr[j*4 + i]
+    At = A2.permute(1, 0);  z = At[i, j]                # At[i, j]  -> A_ptr[j*4 + i]
 
 .. code-block:: c++
 
@@ -464,13 +468,18 @@ data pointer 保持不变，变化的是 index arithmetic。``A.view(64, 4)`` �
     At_ptr[(j * 4) + i]                       // permute: swapped strides
 
 **Register：``local``。** 对带 thread axis 的 ``local`` layout 做分解，返回
-属于当前 thread 的 flat register bundle。Tile primitives 会频繁使用它：
+属于当前 thread 的 register bundle。未显式传入 ``layout=`` 时，
+``R.local()`` 会为 raw physical storage span（包括 layout gaps 和 offsets）
+推断 flat view；``R.local(d0, d1, ...)`` 则以 row-major 方式 reshape 同一 span，
+各维乘积必须与 span 相同。只有需要不同 storage-coordinate mapping 时才传入
+``layout=``：
 
 .. code-block:: python
 
     R  = T.alloc_buffer((32, 8), "float32", scope="local", layout=TileLayout(S[(32, 8) : (1 @ laneid, 1)]))
-    Rl = R.local(8)          # this lane's 8 registers
+    R_flat = R.local()       # this lane's 8 registers, physical order
+    R_2d = R.local(2, 4)     # the same registers, row-major 2x4 reshape
 
 .. code-block:: c++
 
-    alignas(64) float Rl_ptr[8];             // the lane's private registers
+    alignas(64) float R_flat_ptr[8];         // the lane's private registers

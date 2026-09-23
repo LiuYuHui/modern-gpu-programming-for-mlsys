@@ -24,7 +24,17 @@ From a performance-analysis perspective, a kernel spends its time on two main ac
 
 The compute ceiling, or peak compute throughput, is the maximum FLOP/s the hardware can provide on the compute path used by the current kernel. For dense FP16/BF16 Tensor Core GEMM on B200, this ceiling usually comes from Tensor Core throughput. For scalar or elementwise kernels, it may instead come from CUDA cores, special-function units, or some other execution unit.
 
-The memory-bandwidth ceiling can be estimated by multiplying HBM bandwidth by arithmetic intensity. If a kernel does little computation for each byte moved, its performance is usually limited by HBM bandwidth. If each byte supports many operations, the kernel has a better chance of entering the compute-bound region, where the ceiling is more likely to be set by compute throughput.
+Memory bandwidth is the amount of data that a memory level can transfer per unit time, usually
+measured in GB/s or TB/s. The 8 TB/s value above means that, under ideal conditions, the HBM
+interface can transfer about 8 TB of data per second. A bandwidth number therefore always refers to
+a particular level of the memory hierarchy: HBM, L2, and shared memory have different bandwidths.
+Unless stated otherwise, this chapter uses *memory bandwidth* to mean HBM bandwidth.
+
+Given this bandwidth ceiling, the memory-side performance ceiling can be estimated by multiplying
+HBM bandwidth by arithmetic intensity. If a kernel does little computation for each byte moved, its
+performance is usually limited by HBM bandwidth. If each byte supports many operations, the kernel
+has a better chance of entering the compute-bound region, where the ceiling is more likely to be set
+by compute throughput.
 
 In units of FLOP/s, the basic roofline bound is:
 
@@ -80,14 +90,18 @@ $$
 \approx 250
 $$
 
-A kernel therefore needs to perform roughly 250 FLOPs for every byte moved from HBM before it can
-approach the Tensor Core compute ceiling in this rough model. Below that arithmetic intensity, the
-kernel is **memory-bound**: HBM cannot deliver data quickly enough to keep the compute units busy.
+In this rough model, classify a kernel by comparing its arithmetic intensity with the ridge point:
 
-The value of the roofline model is that it identifies which class of resource limits performance.
-Reducing a few arithmetic instructions rarely helps a memory-bound kernel, while a small memory
-optimization does not change the primary bottleneck of a compute-bound kernel. The first step in
-optimization is therefore to determine which side of the ridge point the kernel occupies.
+- **Below the ridge point:** the memory-bandwidth line sets the roof, so the kernel is more likely
+  memory-bound.
+- **Above the ridge point:** the compute-throughput line sets the roof, so the kernel is more likely
+  compute-bound.
+- **Near the ridge point:** the two ceilings are similar, so either resource may matter.
+
+This comparison is an initial classification rather than a substitute for measurement and
+profiling. It still gives the optimization direction: reducing a few arithmetic instructions rarely
+helps a memory-bound kernel, while a small memory optimization does not change the primary
+bottleneck of a compute-bound kernel.
 
 ![A B200 roofline with example workloads, showing the memory roof, the compute roof, and the ridge point](../img/roofline.png)
 
@@ -137,9 +151,9 @@ data movement and computation to overlap as much as possible.
 
 Once a kernel is known to be memory-bound, there are two avenues for optimization: reduce HBM
 traffic to raise arithmetic intensity, or, when the traffic cannot be reduced further, bring
-effective bandwidth as close as possible to the hardware limit.
+the actual data-transfer rate as close as possible to the bandwidth ceiling.
 
-Fusion is often the most direct method. A common source of low arithmetic intensity is that one kernel writes an intermediate tensor to HBM, and the next operation immediately reads it back. After fusing the producer, which creates the intermediate, with the consumer, which uses it, the intermediate can stay in registers or on-chip storage such as SMEM or TMEM, avoiding that HBM round trip.
+Fusion is often the most direct method. A common source of low arithmetic intensity is an intermediate tensor that one kernel writes to HBM and the next operation immediately reads back. Fusing the operation that produces the intermediate with the operation that consumes it can keep the value in registers or on-chip storage such as SMEM or TMEM, avoiding the HBM round trip.
 
 - Fuse GEMM with an elementwise epilogue.
 - Fuse normalization into an adjacent operator.
@@ -238,7 +252,7 @@ implementation that approaches that ceiling.
 
 A large fp16 GEMM may be compute-bound in theory. That only means the HBM-level memory roof is not the main limit; it does not mean any implementation will reach the Tensor Core compute roof. Closing the gap requires the right instructions, layouts, staging, synchronization, and scheduling. The later GEMM chapters show this on B200 through a sequence of steps: each step keeps the same basic algorithm but changes how the tile is computed or scheduled.
 
-In the GEMM optimization ladder, the first large measured jump is the move from the thread-copy tiled path to the TMA-backed path. The former uses ordinary CTA threads to copy tiles from GMEM to SMEM; the latter delegates this regular tile movement to the TMA hardware engine, letting the kernel feed Tensor Cores through hardware-managed bulk copies.
+In the GEMM optimization ladder, the first large measured jump is the move from the thread-copy tiled path to the TMA-backed path. The former uses ordinary CTA threads to copy tiles from GMEM to SMEM; the latter delegates this regular tile movement to the TMA hardware engine. TMA fills SMEM through hardware-managed bulk copies, and the MMA path then reads those tiles from SMEM.
 
 After that first jump, subsequent optimizations address one question: how can the kernel reduce
 waiting among data movement, Tensor Core computation, and the epilogue? Software pipelining and warp
@@ -257,7 +271,7 @@ CTA clusters, and multi-consumer execution each change.
 
 ## Reducing Idle Time Through Overlap
 
-Once a GEMM is compute-bound and already uses Tensor Cores, the remaining gap usually comes from hardware idle time.
+Once a GEMM is compute-bound and already uses Tensor Cores, the remaining gap usually reflects periods when one or more execution paths are not fully utilized.
 
 A simple kernel might do this:
 
@@ -282,7 +296,7 @@ store tile k - 1
 ```
 
 On Blackwell, TMA, `tcgen05.mma`, and the epilogue/store path primarily execute these three stages,
-while `mbarrier` coordinates data handoffs among them.
+while `mbarrier` coordinates completion and buffer ownership between them.
 
 Overlap does not remove dependencies. The MMA for tile `k` must still wait for that tile to load, and
 the epilogue must still wait for the MMA to complete. The kernel can instead advance independent
@@ -302,7 +316,7 @@ each CTA uses a large amount of shared memory, fewer CTAs or warps fit on the SM
 Many modern Tensor Core kernels intentionally spend resources in ways that reduce occupancy. Multi-stage shared memory pipelines consume SMEM. Large register fragments consume registers. TMEM allocations consume Tensor Memory capacity. Warp specialization may reserve whole warps for producer or consumer roles.
 
 This is a deliberate tradeoff. Rather than hiding latency with many resident warps, these kernels
-explicitly overlap stages within a smaller number of resident CTAs. A low-occupancy kernel can still
+explicitly overlap stages within a smaller number of resident CTAs. A low-occupancy kernel may still
 perform well if its pipeline keeps TMA, Tensor Cores, and the store path active.
 
 Each approach has its place. Kernels with irregular memory access or limited opportunities for an
@@ -320,7 +334,11 @@ A practical kernel analysis can proceed in three steps:
 3. Measure how far the implementation is from the relevant roof, then optimize the resource that is
    actually binding.
 
-For a memory-bound kernel, focus on reducing data movement and increasing effective bandwidth. For a
-compute-bound kernel, focus on reducing idle time in the compute units. The roofline model does not
+For a memory-bound kernel, focus on reducing data movement and making transfers approach the
+bandwidth ceiling. For a compute-bound kernel, focus on reducing idle time in the compute units. The roofline model does not
 produce the final implementation, but it prevents effort from being spent on resources that are not
 the bottleneck.
+
+Roofline interpretation starts from a trustworthy measurement. The practical workflow for timing a
+kernel, locating its expensive launches with Proton, and testing a hardware hypothesis with Nsight
+Compute is collected in {ref}`chap_benchmarking`.

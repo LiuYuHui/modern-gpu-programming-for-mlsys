@@ -179,7 +179,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -190,11 +190,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -325,7 +326,7 @@
 
 
 
-<button onclick="window.location.href='../zh/index.html'"
+<button onclick="window.location.href='../zh/chapter_layout_generations/index.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="切换到中文版"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -448,13 +449,19 @@ registers --ordinary store--&gt; SMEM or GMEM
 D_{16\times8}=A_{16\times16}B_{16\times8}+C_{16\times8}.
 \]</div>
 <p>A thread’s lane ID determines which elements of A, B, C, and D it holds. We will begin with the C/D accumulator, where the pattern is easiest to see.</p>
-<p>The PTX mapping repeats in groups of four lanes: lanes 0-3 cover rows 0 and 8, lanes 4-7 cover rows 1 and 9, and the remaining groups continue in the same way. For lane ID <span class="math notranslate nohighlight">\(l\)</span>, define:</p>
+<p>The figure below shows how the complete <code class="docutils literal notranslate"><span class="pre">16x8</span></code> C/D tile is distributed across 32 lanes. Each cell names the lane that holds that element. Matching fills connect the two rows assigned to one four-lane group, while the black borders mark lane 5’s four elements.</p>
+<p><img alt="C/D register-fragment mapping for mma.sync.m16n8k16; every four lanes form a group, and each lane holds one adjacent column pair in two rows" src="../_images/mma_m16n8k16_fragment_en.svg" /></p>
+<p>Read the figure in two steps:</p>
+<ol class="arabic simple">
+<li><p>The 32 lanes form eight groups of four. Group <span class="math notranslate nohighlight">\(g\)</span> owns rows <span class="math notranslate nohighlight">\(g\)</span> and <span class="math notranslate nohighlight">\(g+8\)</span>.</p></li>
+<li><p>The four lanes in that group split the eight columns. Position <span class="math notranslate nohighlight">\(t\)</span> owns columns <span class="math notranslate nohighlight">\(2t\)</span> and <span class="math notranslate nohighlight">\(2t+1\)</span> in both rows.</p></li>
+</ol>
+<p>For lane ID <span class="math notranslate nohighlight">\(l\)</span>, its group and its position within that group are:</p>
 <div class="math notranslate nohighlight">
 \[
 g=l\mathbin{//}4,\qquad t=l\bmod 4.
 \]</div>
-<p>Here, <span class="math notranslate nohighlight">\(g\)</span> is the four-lane group index, and <span class="math notranslate nohighlight">\(t\)</span> is the lane’s position within that group.</p>
-<p>Group <span class="math notranslate nohighlight">\(g\)</span> covers rows <span class="math notranslate nohighlight">\(g\)</span> and <span class="math notranslate nohighlight">\(g+8\)</span> of the output tile. Lane <span class="math notranslate nohighlight">\(t\)</span> within the group covers columns <span class="math notranslate nohighlight">\(2t\)</span> and <span class="math notranslate nohighlight">\(2t+1\)</span> in both rows. Each lane therefore holds four <code class="docutils literal notranslate"><span class="pre">fp32</span></code> accumulator values at:</p>
+<p>Each lane therefore holds four <code class="docutils literal notranslate"><span class="pre">fp32</span></code> accumulator values at:</p>
 <div class="math notranslate nohighlight">
 \[
 (g,2t),\qquad
@@ -462,7 +469,7 @@ g=l\mathbin{//}4,\qquad t=l\bmod 4.
 (g+8,2t),\qquad
 (g+8,2t+1).
 \]</div>
-<p>For example, lane 5 has:</p>
+<p>The figure highlights lane 5. For this lane:</p>
 <div class="math notranslate nohighlight">
 \[
 g=5\mathbin{//}4=1,\qquad t=5\bmod4=1,
@@ -625,7 +632,7 @@ SFA, SFB: GMEM --TMA--&gt; SMEM --tcgen05.cp--&gt; TMEM --tcgen05.mma--&gt; Tens
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">S[...]</span></code> maps <code class="docutils literal notranslate"><span class="pre">(Mgroup,</span> <span class="pre">lane,</span> <span class="pre">sfk)</span></code> to byte positions in TMEM. In a typed TIRx layout, <code class="docutils literal notranslate"><span class="pre">&#64;TCol</span></code> strides are measured in buffer elements. A scale factor is 8 bits here, so the logical TCol position is <code class="docutils literal notranslate"><span class="pre">4*Mgroup+sfk</span></code>; every four consecutive positions pack into one 32-bit hardware TCol cell. Equivalently, <code class="docutils literal notranslate"><span class="pre">hardware_TCol=(4*Mgroup+sfk)//4</span></code> and <code class="docutils literal notranslate"><span class="pre">byte_in_word=(4*Mgroup+sfk)%4</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">R[...]</span></code> adds four replicas along <code class="docutils literal notranslate"><span class="pre">TLane</span></code>. The <code class="docutils literal notranslate"><span class="pre">.32x128b.warpx4</span></code> form of <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> creates this layout: it writes one 32-lane window, then broadcasts the same data into the other three warp windows.</p>
+<p><code class="docutils literal notranslate"><span class="pre">R[...]</span></code> adds four replicas along <code class="docutils literal notranslate"><span class="pre">TLane</span></code>. The <code class="docutils literal notranslate"><span class="pre">.32x128b.warpx4</span></code> form of <code class="docutils literal notranslate"><span class="pre">tcgen05.cp</span></code> creates this layout by multicasting the same base tile into four 32-lane warp windows.</p>
 </section>
 <section id="word-level-replication-for-scale-vec">
 <h3>Word-Level Replication for <code class="docutils literal notranslate"><span class="pre">scale_vec</span></code><a class="headerlink" href="#word-level-replication-for-scale-vec" title="Link to this heading">#</a></h3>

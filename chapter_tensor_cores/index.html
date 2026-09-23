@@ -177,7 +177,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -188,11 +188,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -323,7 +324,7 @@
 
 
 
-<button onclick="window.location.href='../zh/index.html'"
+<button onclick="window.location.href='../zh/chapter_tensor_cores/index.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="切换到中文版"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -501,7 +502,7 @@
 <h2>How <code class="docutils literal notranslate"><span class="pre">cta_group</span></code> Sets the Operation Scope<a class="headerlink" href="#how-cta-group-sets-the-operation-scope" title="Link to this heading">#</a></h2>
 <p>With <code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code>, the MMA updates only the current CTA’s TMEM. We begin with the common dense-A path, where every A element is stored explicitly and descriptors supply both A and B from SMEM. Some <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> variants can instead read A from TMEM.</p>
 <p>With <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code>, the MMA accesses the TMEM of both CTAs in a pair. A CTA pair consists of two CTAs in the same cluster whose <code class="docutils literal notranslate"><span class="pre">%cluster_ctarank</span></code> values differ only in the least-significant bit. One rank is even and the other is odd; we refer to them below as the even CTA and the odd CTA.</p>
-<p>Only one thread in the CTA pair needs to issue <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>. That thread may belong to either CTA, but the peer CTA must remain active. The kernels later in this book generally elect one thread in the even CTA to issue the MMA and use <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code> to arrange completion notification.</p>
+<p>Only one thread in the CTA pair needs to issue <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code>. That thread may belong to either CTA, but the peer CTA must remain active. The kernels later in this book generally elect one thread in the even CTA to issue the MMA and use <code class="docutils literal notranslate"><span class="pre">tcgen05.commit</span></code> to associate the completion of the previously issued operations with an <code class="docutils literal notranslate"><span class="pre">mbarrier</span></code>.</p>
 <p>The accumulator layout depends on four choices: <code class="docutils literal notranslate"><span class="pre">cta_group</span></code>, the size of M, whether A is dense or structured sparse, and whether the instruction is ordinary <code class="docutils literal notranslate"><span class="pre">tcgen05.mma</span></code> or the weight-stationary <code class="docutils literal notranslate"><span class="pre">tcgen05.mma.ws</span></code>. The selected layout maps each logical coordinate <code class="docutils literal notranslate"><span class="pre">(m,n)</span></code> to <code class="docutils literal notranslate"><span class="pre">TLane</span></code> and <code class="docutils literal notranslate"><span class="pre">TCol</span></code>.</p>
 <p>The instruction descriptor supplies N. For the <code class="docutils literal notranslate"><span class="pre">f16</span></code>/<code class="docutils literal notranslate"><span class="pre">bf16</span></code> path considered here, <code class="docutils literal notranslate"><span class="pre">cta_group::1</span></code> supports N from 8 through 256 in increments of 8, while <code class="docutils literal notranslate"><span class="pre">cta_group::2</span></code> supports N from 16 through 256 in increments of 16. The four figures below use the symbol N for any of these legal values. Purple denotes SMEM operands, orange denotes the TMEM accumulator, and green denotes the Tensor Core MMA path.</p>
 <section id="cta-group-1-m-128">

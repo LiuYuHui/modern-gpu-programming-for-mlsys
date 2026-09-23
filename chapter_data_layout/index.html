@@ -179,7 +179,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../appendix/index.html">Overview</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -190,11 +190,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tirx_guide/arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -325,7 +326,7 @@
 
 
 
-<button onclick="window.location.href='../zh/index.html'"
+<button onclick="window.location.href='../zh/chapter_data_layout/index.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="切换到中文版"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -415,8 +416,8 @@
 <p>Computations over the same values can differ in performance by an order of magnitude on the same GPU
 depending only on how those values are physically arranged in memory.</p>
 <p>A tensor’s logical indices do not say where its bytes are actually stored. The hardware is highly
-sensitive to that placement. It determines whether loads from 32 lanes coalesce into one transaction
-or split across as many as 32, whether addresses land in different memory banks or collide and
+sensitive to that placement. Depending on the access pattern, it determines whether loads from 32
+lanes can be coalesced into one transaction or must be split across as many as 32, whether addresses land in different memory banks or collide and
 serialize, and whether a tile has a byte arrangement that a Tensor Core can read.</p>
 <p>Machine learning programs usually describe a tensor by its logical shape. A <strong>data layout</strong> supplies
 the missing physical information: it says where the element at logical index <code class="docutils literal notranslate"><span class="pre">(i,</span> <span class="pre">j,</span> <span class="pre">…)</span></code> resides,
@@ -795,8 +796,8 @@ entire <code class="docutils literal notranslate"><span class="pre">8×8</span><
 <code class="docutils literal notranslate"><span class="pre">1,</span> <span class="pre">0,</span> <span class="pre">3,</span> <span class="pre">2,</span> <span class="pre">5,</span> <span class="pre">4,</span> <span class="pre">7,</span> <span class="pre">6</span></code>. The official figure adds that row’s index offset of <code class="docutils literal notranslate"><span class="pre">8</span></code> to the same
 arrangement, producing <code class="docutils literal notranslate"><span class="pre">9,</span> <span class="pre">8,</span> <span class="pre">11,</span> <span class="pre">10,</span> <span class="pre">13,</span> <span class="pre">12,</span> <span class="pre">15,</span> <span class="pre">14</span></code>.</p>
 <p>We call each 128-bit cell in the figure a 16 B <strong>sector</strong>. In <code class="docutils literal notranslate"><span class="pre">SWIZZLE_128B</span></code>, each row of an atom
-contains eight sectors, for a total width of 128 B. At the common 4-byte bank granularity, one sector
-spans four banks, so a full row covers all 32 banks. The swizzle uses the row coordinate to
+contains eight sectors, for a total width of 128 B. At the common 4-byte bank granularity, the four
+32-bit words in one sector map to four adjacent banks, so a full row covers all 32 banks. The swizzle uses the row coordinate to
 XOR-permute the eight sectors within that row.</p>
 <p>A <code class="docutils literal notranslate"><span class="pre">SWIZZLE_128B</span></code> atom contains eight rows, so its total size is <code class="docutils literal notranslate"><span class="pre">8</span> <span class="pre">×</span> <span class="pre">128</span> <span class="pre">B</span> <span class="pre">=</span> <span class="pre">1024</span> <span class="pre">B</span></code>. Here,
 <code class="docutils literal notranslate"><span class="pre">128</span> <span class="pre">B</span></code> is the width of each atom row along the contiguous dimension, not the total atom size. The

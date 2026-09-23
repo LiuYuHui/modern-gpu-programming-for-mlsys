@@ -4,9 +4,9 @@
 :::{admonition} 本章概览
 :class: overview
 
-- 本章使用 TIRx tile primitives，从一个输出 tile 开始构建 tiled GEMM。
-- 第 1 步完成单个 tile 的计算，第 2 步沿 K 维循环累加，第 3 步将完整输出矩阵划分为多个 tiles，并交给不同的 CTAs 计算。
-- 本章先保证结果正确，后两章再逐步优化性能。
+- 第 1 步从输出矩阵 D 中一个顺序计算的 $128\times128$ tile 开始，走通输入矩阵 A、B 从 GMEM 加载到 SMEM、`tcgen05` MMA 将结果写入 TMEM，以及 D 的读回与写出。
+- 第 2 步沿 K 维分块，并在同一块 TMEM accumulator 中累加 partial sums；每次复用 MMA barrier 时，都要更新下一轮的等待状态。
+- 第 3 步沿 M、N 维划分 output tiles，并让多个 CTAs 分别计算这些 tiles，从而覆盖完整的输出矩阵。
 :::
 
 GEMM 是本书后续章节反复使用的核心计算。Linear layer、attention projection 和许多 convolution 实现都以矩阵乘法为基础，而这些运算通常占据 GPU 的大部分执行时间。要进一步优化 GEMM，首先需要一个结果正确、结构清楚的基线 kernel。
@@ -28,7 +28,9 @@ GEMM 是稠密矩阵乘法，也是 linear layer、attention projection 和许�
 
 这里将 $B$ 按 $N \times K$ 存储，这是 linear-layer weights 常见的存储方式。计算时直接读取 $B[n,k]$；若写成矩阵形式，等价于 $D=AB^{\top}$，但 kernel 不会额外转置或重排 $B$。
 
-本章使用 TFLOPS 衡量 kernel throughput。一次 multiply-add 计作两次浮点运算，因此：
+示例中的 $A$、$B$ 和 $D$ 都以 fp16 存储。MMA 沿 $K$ 维累加时使用 fp32 accumulator，以减小累计舍入误差。
+
+Kernel 性能使用 TFLOPS 衡量。一次 multiply-add 计作两次浮点运算，因此：
 
 $$\text{TFLOPS} = \frac{2 \times M \times N \times K}{t_{\text{seconds}} \times 10^{12}}$$
 
@@ -38,7 +40,7 @@ $$\text{TFLOPS} = \frac{2 \times M \times N \times K}{t_{\text{seconds}} \times 
 
 ![*Memory 数据流*](../../img/memory_dataflow.png)
 
-从左向右看：operand tiles 先从 GMEM 进入 SMEM；`tcgen05.mma` 读取 SMEM 中的 operands，并把 accumulator 写入 TMEM；最后，epilogue 将 TMEM 中的结果读入 registers，再写回 GMEM。后续优化会改变其中某一步如何执行，但不会改变这条基本路径。
+从左向右看：operand tiles 先从 GMEM 进入 SMEM；`tcgen05.mma` 读取 SMEM 中的 operands，并把 accumulator 写入 TMEM；最后的结果写回阶段称为 epilogue，它将 TMEM 中的结果读入 registers，再写回 GMEM。后续优化会改变其中某一步如何执行，但不会改变这条基本路径。
 
 ## 优化路线
 
@@ -47,35 +49,35 @@ $$\text{TFLOPS} = \frac{2 \times M \times N \times K}{t_{\text{seconds}} \times 
 - **TMA 异步搬运**：使用 Blackwell 的硬件 copy path 在 GMEM 与 SMEM 之间搬运 tiles，并通过 barrier 跟踪完成状态。
 - **Software pipeline**：使用多个 SMEM stages，让下一块 K tile 的数据搬运与当前 tile 的 Tensor Core 计算重叠。
 - **Persistent scheduling**：不再为每个 output tile 启动一个 CTA，而是让固定数量的 CTAs 通过 tile scheduler 反复处理多个 tiles。
-- **Warp specialization**：把 producer、MMA consumer 和 writeback 分配给不同 warpgroups。
+- **Warp specialization**：把 producer、MMA consumer 和 writeback 分配给专门的 warps 或 warpgroups。
 - **CTA cluster**：让两个 CTAs 协作计算一个更大的 Blackwell MMA tile。
-- **Multi-consumer execution**：让多个 consumer warpgroups 同时计算 tile 的不同部分，提高计算密度。
+- **Multi-consumer execution**：使用多个 MMA consumer warps 分别计算不同的 output rows，并为每个 consumer 配置对应的 writeback warpgroup；这些 consumers 共用同一份 staged B tile。
 
 ---
 
 (chap_single_tile)=
 ## 第 1 步：顺序执行的单 Tile GEMM
 
-第 1 步沿用“TIRx 入门”中的 `hgemm_v1`，详细拆解其数据路径，并将它作为后续版本的正确性基线。这个 kernel 只计算一个 `128×128` output tile，并取 `K=64`；该规模不需要循环，数据路径中的每一步只出现一次，便于逐段理解。
+第 1 步沿用 {ref}`chap_tirx_primer` 中的 `hgemm_v1`，详细拆解其数据路径，并将它作为后续版本的正确性基线。这个 kernel 只计算一个 `128×128` output tile，并取 `K=64`；该规模不需要循环，数据路径中的每一步只出现一次，便于逐段理解。
 
-> **这一步建立基线**
+> **第 1 步的执行结构**
 > - Scope：一个包含 128 个 threads 的 warpgroup 按顺序执行整条数据路径。
 > - Layout：A、B tiles 位于 SMEM，accumulator 位于 TMEM，结果通过 registers 写出。
-> - Dispatch：同步 `Tx.copy` 负责加载，`tcgen05` 执行 MMA。
+> - Dispatch：同步 `Tx.cta.copy` 负责加载，`tcgen05` 执行 MMA。
 
 ### 单 Tile 数据流
 
 这个 kernel 只沿 `GMEM -> SMEM -> TMEM -> registers -> GMEM` 路径执行一次，不包含循环。具体步骤如下：
 
-1. **分配**：通过 pool allocator 分配 SMEM，通过 `tcgen05.alloc` 分配 TMEM，并准备 mbarrier。
-2. **加载**：128 个 threads 使用同步 `Tx.copy`，协作将 A、B tiles 从 GMEM 搬到 SMEM。
+1. **分配**：通过 pool allocator 分配 SMEM，通过 `tcgen05.alloc` 分配 TMEM，并准备等待 MMA 完成的 mbarrier。
+2. **加载**：128 个 threads 使用同步 `Tx.cta.copy`，协作将 A、B tiles 从 GMEM 搬到 SMEM。
 3. **计算**：选出的一个 thread 发出 `Tx.gemm_async` 和 `tcgen05.commit`，所有 threads 等待 mbarrier。
 4. **写回**：warpgroup 将 TMEM 读入 registers；每个 thread 把 fp32 转成 fp16，再写入 GMEM。
 5. **释放**：释放 TMEM。
 
 ### Kernel 的四个部分
 
-下面先分别介绍存储空间分配、operand 加载、MMA 发起和结果写回，再把它们组合成完整 kernel。相关 API 已在第二部分（{ref}`chap_tirx_primer`、{ref}`chap_tirx_layout_api`）中介绍。
+下面先分别介绍存储空间分配、operand 加载、MMA 发起和结果写回，再把它们组合成完整 kernel。相关 API 已在第二部分（{ref}`chap_tirx_primer`、{ref}`chap_tirx_layout_api`）中介绍。本节固定使用 `BLK_M=BLK_N=128`、`BLK_K=64`；`m_st` 和 `n_st` 表示当前 output tile 在 D 中的行、列起点，在这个单 tile kernel 中都为 0。
 
 **分配存储空间。** Kernel 先为 operands 分配 shared memory，并为 TMEM address 和 mbarrier 预留位置：
 
@@ -89,9 +91,9 @@ Bsmem = pool.alloc((BLK_N, BLK_K), b_type, layout=B_layout)  # 128×64 fp16
 pool.commit()
 ```
 
-`pool.move_base_to(1024)` 将 SMEM pool 的当前分配位置移动到 byte offset 1024。之后，`Asmem` 从这里开始分配，`Bsmem` 紧随其后；前面的区域留给 `tmem_addr`、`mma_bar` 等 metadata。
+`pool.move_base_to(1024)` 将 SMEM pool 的当前分配位置移动到 byte offset 1024。之后，`Asmem` 从这里开始分配，`Bsmem` 紧随其后；前面的区域留给 `tmem_addr`、`mma_bar` 等少量管理数据。
 
-`A_layout` 和 `B_layout` 由 `tma_shared_layout(dtype, swizzle_mode, shape)` 生成。这个函数根据数据类型、swizzle mode 和 tile shape 构造 shared-memory layout；这里选择 128-byte swizzle，得到与当前 `tcgen05.mma` dispatch 匹配的 SMEM 排列。`layout=A_layout` 和 `layout=B_layout` 再将这两个 layout 分别绑定到 `Asmem` 和 `Bsmem`。
+`A_layout` 和 `B_layout` 由 `mma_shared_layout(dtype, swizzle_mode, shape)` 生成。这个函数根据数据类型、swizzle mode 和 tile shape 构造 shared-memory layout；这里选择 128-byte swizzle，得到与当前 `tcgen05.mma` dispatch 匹配的 SMEM 排列。`layout=A_layout` 和 `layout=B_layout` 再将这两个 layout 分别绑定到 `Asmem` 和 `Bsmem`。
 
 第 1 步由 `Tx.cta.copy` 按照这些 layout 写入数据，随后 `tcgen05.mma` 按照匹配的排列读取。
 
@@ -121,7 +123,7 @@ T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
 
 只有一个 thread 发出指令，并不表示矩阵乘法由这个 thread 单独完成。硬件仍然根据 SMEM operand layouts 和 TMEM accumulator layout，对整个 tile 执行 MMA。若让 128 个 threads 都发出同一操作，硬件反而会重复启动这次计算。
 
-`Tx.gemm_async` 表示一个 tile operation，而不是一条硬件指令。这里 `K=64`，大于硬件 MMA 的 K-atom（`MMA_K=16`），因此 TIRx 会沿 K 维将它 lower 成一小段 `tcgen05.mma` 指令序列。
+`Tx.gemm_async` 表示一个 tile operation，而不是一条硬件指令。这里 tile 的 K 维大小为 64，而底层每条 MMA 指令处理 16 个 K 元素，因此 TIRx 会将它 lower 成一小段 `tcgen05.mma` 指令序列。
 
 `tcgen05.mma` 是异步操作。`tcgen05.commit` 将前面发出的 MMA 与 `mma_bar` 关联；warpgroup 中的 threads 随后在外层执行 `mbarrier.try_wait`，等到 barrier 完成后才能读取 TMEM 中的结果。
 
@@ -168,11 +170,11 @@ m_thr = T.meta_var(m_st + warp_id * 32 + lane_id)
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 ```
 
-Kernel 使用后续步骤共同采用的 `hgemm_vX(M, N, K)` 形式。第 1 步取 `M=N=128, K=64`，因此 launch 中只有一个 output tile：
+Kernel 使用后续步骤共同采用的 `hgemm_vX(M, N, K)` 形式。一次 kernel launch 中的所有 CTAs 构成 grid；第 1 步取 `M=N=128, K=64`，只需要一个 CTA，因此 grid shape 为 `1×1`：
 
 ```python
 def hgemm_v1(M, N, K):
@@ -182,13 +184,12 @@ def hgemm_v1(M, N, K):
     acc_type = tvm.DataType("float32")
 
     BLK_M, BLK_N, BLK_K = 128, 128, 64
-    # MMA_M/MMA_N/MMA_K document the underlying hardware MMA tile; they are not
-    # passed to gemm_async (which derives the MMA shape from the operand and
-    # accumulator tiles), so the later steps omit them.
+    # MMA_M/MMA_N/MMA_K 记录底层硬件 MMA tile 的 shape。gemm_async 会根据
+    # operands 和 accumulator tiles 推导该 shape，因此后续步骤不再保留这些常量。
     MMA_M, MMA_N, MMA_K = 128, 128, 16
 
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
 
     @T.prim_func
     def kernel(
@@ -197,9 +198,8 @@ def hgemm_v1(M, N, K):
         D: T.Buffer((M, N), d_type),
     ):
         T.device_entry()
-        # Step 1 is a single-tile kernel: M = BLK_M and N = BLK_N, so the grid
-        # is 1x1. Starting with a 1x1 grid keeps the per-CTA tile offsets
-        # (m_st, n_st) trivially zero; Steps 3+ generalise this to larger M / N.
+        # 第 1 步只计算一个 tile：M=BLK_M、N=BLK_N，因此 grid shape 为 1x1。
+        # 此时每个 CTA 的 tile offsets（m_st、n_st）都为 0；第 3 步再扩展到更大的 M、N。
         bx, by = T.cta_id([M // BLK_M, N // BLK_N])
         wg_id = T.warpgroup_id([1])      # single warpgroup, so wg_id is always 0 (unused below)
         warp_id = T.warp_id_in_wg([4])
@@ -233,14 +233,12 @@ def hgemm_v1(M, N, K):
         n_st = T.meta_var(by * BLK_N)
         phase_mma: T.int32 = 0
 
-        # --- Load: all threads copy global -> shared (synchronous).
-        # With M=BLK_M and N=BLK_N the slices below cover the full matrices;
-        # the slice form is kept so the diff to Step 3 (multi-tile) is minimal.
-        Tx.cta.copy(Asmem[:, :], A[m_st:m_st + BLK_M, :])
-        Tx.cta.copy(Bsmem[:, :], B[n_st:n_st + BLK_N, :])
+        # --- Load：所有 threads 同步完成 global -> shared copy ---
+        Tx.cta.copy(Asmem[:, :], A[:, :])
+        Tx.cta.copy(Bsmem[:, :], B[:, :])
         T.cuda.cta_sync()
 
-        # --- Compute: single elected thread issues MMA ---
+        # --- Compute：由一个 elected thread 发起 MMA ---
         if warp_id == 0:
             if T.ptx.elect_sync():
                 Tx.gemm_async(
@@ -251,7 +249,7 @@ def hgemm_v1(M, N, K):
 
         T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
 
-        # --- Writeback: TMEM -> RF -> GMEM ---
+        # --- Writeback：TMEM -> RF -> GMEM ---
         Dreg = T.alloc_local((BLK_N,), acc_type)
         Dreg_f16 = T.alloc_local((BLK_N,), d_type)
         Dreg_wg = Dreg.view(128, BLK_N,
@@ -262,7 +260,7 @@ def hgemm_v1(M, N, K):
         m_thr = T.meta_var(m_st + warp_id * 32 + lane_id)
         Tx.copy(D[m_thr, n_st : n_st + BLK_N], Dreg_f16[:])
 
-        # --- Deallocate TMEM ---
+        # --- 释放 TMEM ---
         T.cuda.cta_sync()
         if warp_id == 0:
             T.ptx.tcgen05.relinquish_alloc_permit(cta_group=1)
@@ -290,18 +288,18 @@ A_tensor = torch.randn(M, K, dtype=torch.float16, device=device)
 B_tensor = torch.randn(N, K, dtype=torch.float16, device=device)
 D_tensor = torch.zeros(M, N, dtype=torch.float16, device=device)
 
-# ex.mod(...) takes torch tensors directly, the same call form used in every chapter.
+# ex.mod(...) 可以直接接收 torch tensors；后续章节沿用相同的调用方式。
 ex.mod(A_tensor, B_tensor, D_tensor)
 
 D_ref = (A_tensor.float() @ B_tensor.float().T).half()
 max_err = float((D_tensor - D_ref).abs().max())
 print(f"Max error vs torch reference: {max_err:.6f}")
-# Relative tolerance, like the warp-specialization and Flash Attention cells:
-# output magnitude grows with K, so a fixed absolute bound would fail at larger K.
+# 与 warp specialization 和 Flash Attention 的示例一样，这里使用相对容差：
+# output magnitude 会随 K 增长，固定的绝对误差上限不适用于较大的 K。
 torch.testing.assert_close(D_tensor, D_ref, rtol=2e-2, atol=1e-2)
 print("PASS")
 
-# Optional timing for larger kernels.
+# 对更大 kernel 进行可选计时。
 ITERS = 10
 for _ in range(3):
     ex.mod(A_tensor, B_tensor, D_tensor)
@@ -318,11 +316,15 @@ tflops = 2 * M * N * K / ms / 1e9
 print(f"Performance: {ms:.3f} ms, {tflops:.1f} TFLOPS")
 ```
 
+这段计时循环适合快速确认数量级，但还不是完整的实验协议。需要报告性能结果时，请遵循
+{ref}`chap_benchmarking`：明确计时边界，采集多组样本，说明 cache 与 clock 策略，并将
+无 profiler 的 latency 测量和 Proton、Nsight Compute 分析分开运行。
+
 ### 单 Tile Kernel 的限制
 
 这个 kernel 已经能够算对，但适用范围很窄。当前仍有以下限制：
 
-- 只处理一个 K tile，无法对较大的 K 做 contraction。
+- 只处理一个 K tile，无法沿更大的 K 维完成分块累加。
 - 只处理一个 output tile，因此 M、N 固定为 128。
 - 使用同步的 GMEM → SMEM copy，而不是 TMA。
 - 数据搬运与计算不重叠，两者不能同时执行。
@@ -334,9 +336,11 @@ print(f"Performance: {ms:.3f} ms, {tflops:.1f} TFLOPS")
 
 先解决 K 维的限制。第 1 步只处理一个宽度为 64 的 K tile，而真实矩阵的 K 往往远大于 64。第 2 步仍然只计算一个 output tile，但允许 K 由多个宽度为 64 的 chunks 组成。
 
-基本做法是：对每个 chunk 重复一次 `load -> MMA -> wait`，并让所有 MMA 累加到同一个 TMEM 位置。需要特别注意的是同步。多个 iterations 复用同一个 mbarrier 时，如果 phase 跟踪错误，wait 可能在当前 MMA 真正完成之前返回，最终结果会在没有报错的情况下被破坏。
+基本做法是：对每个 chunk 重复一次 `load -> MMA -> wait`，并让所有 MMA 累加到同一个 TMEM 位置。`Tx.gemm_async` 只负责发起异步 MMA；它返回时，Tensor Core 可能仍在更新 TMEM。随后执行的 `tcgen05.commit` 将本轮 MMA 的完成通知关联到 `mma_bar`，硬件写完 accumulator 后才会向这个 barrier 报告 arrival。`try_wait` 等待的正是这次完成通知，返回后才能确认当前 chunk 的结果已经写入 TMEM。
 
-> **这一步改变 Layout 复用方式**
+所有 iterations 都复用同一个 `mma_bar`。Barrier 每完成一轮就进入下一个 phase，因此 kernel 还要用 `phase_mma` 指明当前等待的是哪一轮。若 phase 跟踪错误，wait 可能把上一轮的完成状态当成当前 MMA 已经完成，最终在没有报错的情况下破坏结果。
+
+> **第 2 步的执行结构**
 > - Scope：不变，仍然是一个 warpgroup。
 > - Layout/复用：K-loop 始终复用同一对 SMEM tiles 和同一个 TMEM accumulator 位置。Operand tiles 依次流过固定 buffers，accumulator 则保留在同一 TMEM 位置。
 > - 同步：复用的 MMA barrier 必须在每个 K chunk 后进入正确 phase，否则后续 wait 可能误把上一轮完成当作当前轮完成。
@@ -348,7 +352,7 @@ print(f"Performance: {ms:.3f} ms, {tflops:.1f} TFLOPS")
 
 `accum` 决定是否读取 TMEM 中已有的 accumulator。第一个 chunk 使用 `accum=False`，直接写入第一份 partial sum；后续 chunks 使用 `accum=True`，把新的乘积累加到已有结果上。
 
-每次 MMA 都通过同一个 `mbarrier` 通知完成。`phase_mma` 记录当前要等待的 barrier phase：
+代码中，每轮选出的 thread 都在 `Tx.gemm_async` 后执行 `tcgen05.commit(mma_bar)`。MMA 完成并报告 arrival 后，barrier 才会离开当前 phase。`phase_mma` 记录当前 iteration 要等待的 phase：
 
 | K iteration | 传给 `try_wait` 的 `phase_mma` | MMA 完成后的 barrier phase |
 |---|---:|---:|
@@ -374,7 +378,7 @@ phase_mma ^= 1
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 ```
 
@@ -390,8 +394,8 @@ def hgemm_v2(M, N, K):
     BLK_M, BLK_N, BLK_K = 128, 128, 64
     K_TILES = K // BLK_K
 
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
 
     @T.prim_func
     def kernel(
@@ -400,7 +404,7 @@ def hgemm_v2(M, N, K):
         D: T.Buffer((M, N), d_type),
     ):
         T.device_entry()
-        bx, by = T.cta_id([M // BLK_M, N // BLK_N])  # still one output tile (M=N=128)
+        bx, by = T.cta_id([M // BLK_M, N // BLK_N])  # 仍然只有一个 output tile（M=N=128）
         wg_id = T.warpgroup_id([1])
         warp_id = T.warp_id_in_wg([4])
         lane_id = T.lane_id([32])
@@ -423,33 +427,33 @@ def hgemm_v2(M, N, K):
         T.cuda.cta_sync()
 
         tmem = T.decl_buffer(
-        (128, 512), "float32", scope="tmem", allocated_addr=tmem_addr[0],
-        layout=TileLayout(S[(128, 512) : (1@TLane, 1@TCol)]))
+            (128, 512), "float32", scope="tmem", allocated_addr=tmem_addr[0],
+            layout=TileLayout(S[(128, 512) : (1@TLane, 1@TCol)]))
 
         phase_mma: T.int32 = 0
         m_st = T.meta_var(bx * BLK_M)
         n_st = T.meta_var(by * BLK_N)
 
-        # === K-loop: iterate over K in chunks of BLK_K ===
-        for i in T.serial(K_TILES):   # serial device loop (keeps the full-K A/B parameters correctly shaped)
-            # Load the i-th K chunk
+        # === K-loop：以 BLK_K 为单位遍历 K ===
+        for i in T.serial(K_TILES):   # device 侧串行 loop；A、B parameters 仍保留完整 K 维
+            # 加载第 i 个 K chunk
             Tx.cta.copy(Asmem[:, :], A[:, i*BLK_K:(i+1)*BLK_K])
             Tx.cta.copy(Bsmem[:, :], B[:, i*BLK_K:(i+1)*BLK_K])
 
             T.cuda.cta_sync()
 
-            # MMA: accum=False for first tile, True for rest
+            # 第一个 tile 使用 accum=False，后续 tiles 使用 accum=True
             if warp_id == 0:
                 if T.ptx.elect_sync():
                     Tx.gemm_async(tmem[:, :BLK_N], Asmem[:, :], Bsmem[:, :],
                                   accum=(i != 0), dispatch="tcgen05", cta_group=1)
                     T.ptx.tcgen05.commit(mma_bar.ptr_to([0]), cta_group=1)
 
-            # Wait for MMA, then flip phase
+            # 等待 MMA 完成，再翻转 phase
             T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
             phase_mma ^= 1
 
-        # === Writeback (same as Step 1) ===
+        # === Writeback（与第 1 步相同）===
         Dreg = T.alloc_local((BLK_N,), acc_type)
         Dreg_f16 = T.alloc_local((BLK_N,), d_type)
         Dreg_wg = Dreg.view(128, BLK_N,
@@ -475,36 +479,48 @@ def hgemm_v2(M, N, K):
 (chap_spatial_tiling)=
 ## 第 3 步：空间 Tiling（Multi-CTA）
 
-K-loop 已经解决 contraction dimension，但 M、N 仍然固定在一个 `128×128` tile。第 3 步使用多个 tiles 覆盖 M、N，并启动一个二维 CTA grid：每个 output tile 对应一个 CTA，GPU 可以并行计算这些 tiles。示例取 `M=N=K=256`，得到 `2×2` tile grid，足以展示索引关系，同时保持规模简单。
+第 2 步允许 K 大于 64，但仍要求 `M=N=128`，因此只能计算一个 `128×128` output tile。实际 GEMM 的 M、N 往往更大。第 3 步将 `M×N` 输出矩阵切成多个 `128×128` tiles，并为每个 tile 启动一个 CTA。
 
-> **这一步改变 Scope**
-> - Scope：二维 CTA grid，每个 CTA 负责一个 `128×128` output tile。
-> - Layout：不变；CTA 内部仍使用第 2 步的 SMEM/TMEM/register 路径。
+前两步的 grid 只有一个 CTA。现在 output tiles 沿 M、N 两个方向排列，因此第 3 步使用二维 grid；CTA 的 coordinate `(bx, by)` 表示它负责第几行、第几列的 output tile。
+
+例如，取 `M=N=256, K=256` 时，输出矩阵被切成 `2×2` 个 tiles，因此 grid shape 为 `2×2`，共包含 4 个 CTAs。每个 CTA 负责一个 output tile，并在内部执行第 2 步的 K-loop。
+
+> **第 3 步的执行结构**
+> - Scope：二维 CTA grid，每个 CTA 计算一个 `128×128` output tile。
+> - Layout：不变，CTA 内部仍使用第 2 步的 SMEM、TMEM 和 register layouts。
 > - Dispatch：不变。
 
 ### Grid 映射
 
-每个 `128×128` output tile 对应一个 CTA，因此 grid shape 为 `[M // BLK_M, N // BLK_N]`。与第 2 步相比，新增的工作只是确定每个 CTA 负责哪些矩阵 slices。
-
-CTA `(bx, by)` 负责下面的输出区域：
+Grid shape 为：
 
 ```text
-D[bx * BLK_M : (bx + 1) * BLK_M,
-  by * BLK_N : (by + 1) * BLK_N]
+[M // BLK_M, N // BLK_N]
 ```
 
-为了计算这块区域，CTA 的 K-loop 会依次加载 A 对应 row band 和 B 对应 row band 中的 K-slices：
+对于 CTA `(bx, by)`，定义：
 
 ```text
-A[bx * BLK_M : (bx + 1) * BLK_M, k : k + BLK_K]
-B[by * BLK_N : (by + 1) * BLK_N, k : k + BLK_K]
+m_st = bx * BLK_M
+n_st = by * BLK_N
 ```
 
-索引直接来自 `D = A @ B.T`：`bx` 选择 A 和 D 的 rows；`by` 选择 B 的 rows，这些 rows 在乘以 `B.T` 后对应 D 的 columns。
+它负责的输出区域为：
 
-每个 CTA 计算一个 tile 是最简单的映射，但会产生重复加载。同一 grid row 中的 CTAs 会从 GMEM 重复加载相同的 A tiles，同一 grid column 中的 CTAs 则会重复加载相同的 B tiles，邻近 CTAs 之间没有显式复用。第 6 步的 persistent scheduling（{ref}`chap_gemm_async`）会重新处理这个问题，使共享 operands 尽可能保留在 L2 中。
+```text
+D[m_st : m_st + BLK_M, n_st : n_st + BLK_N]
+```
 
-**使用你的 agent 练习**：取 `M=N=K=256`、`BLK_M=BLK_N=128`、`BLK_K=64`，分别追踪 CTA `(1, 0)` 和 CTA `(0, 1)`。列出每个 CTA 的 `m_st`、`n_st`，每次 K iteration 加载的 A、B slices，以及最终写入的 D 区域。由于 kernel 计算 `D = A @ B.T`，B 的哪些 rows 会成为 D 的 columns？
+每次 K iteration 加载：
+
+```text
+A[m_st : m_st + BLK_M, k : k + BLK_K]
+B[n_st : n_st + BLK_N, k : k + BLK_K]
+```
+
+这些索引来自 `D = A @ B.T`：`bx` 选择 A 和 D 的行，`by` 选择 B 的行；经过 `B.T` 后，这些 B rows 对应 D 的 columns。
+
+具有相同 `bx` 的 CTAs 会读取相同的 A tiles，具有相同 `by` 的 CTAs 则会读取相同的 B tiles。当前版本没有显式实现跨 CTA 的数据复用。
 
 ### 完整 Kernel
 
@@ -514,7 +530,7 @@ B[by * BLK_N : (by + 1) * BLK_N, k : k + BLK_K]
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 ```
 
@@ -530,8 +546,8 @@ def hgemm_v3(M, N, K):
     BLK_M, BLK_N, BLK_K = 128, 128, 64
     K_TILES = K // BLK_K
 
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
 
     @T.prim_func
     def kernel(
@@ -564,17 +580,17 @@ def hgemm_v3(M, N, K):
         T.cuda.cta_sync()
 
         tmem = T.decl_buffer(
-        (128, 512), "float32", scope="tmem", allocated_addr=tmem_addr[0],
-        layout=TileLayout(S[(128, 512) : (1@TLane, 1@TCol)]))
+            (128, 512), "float32", scope="tmem", allocated_addr=tmem_addr[0],
+            layout=TileLayout(S[(128, 512) : (1@TLane, 1@TCol)]))
 
         phase_mma: T.int32 = 0
 
-        # Per-CTA tile offsets
+        # 当前 CTA 的 tile offsets
         m_st = T.meta_var(bx * BLK_M)
         n_st = T.meta_var(by * BLK_N)
 
-        # K-loop with offset A and B slices
-        for i in T.serial(K_TILES):   # serial device loop (keeps the full-K A/B parameters correctly shaped)
+        # K-loop：加载带 offset 的 A、B slices
+        for i in T.serial(K_TILES):   # device 侧串行 loop；A、B parameters 仍保留完整 K 维
             Tx.cta.copy(Asmem[:, :], A[m_st:m_st+BLK_M, i*BLK_K:(i+1)*BLK_K])
             Tx.cta.copy(Bsmem[:, :], B[n_st:n_st+BLK_N, i*BLK_K:(i+1)*BLK_K])
 
@@ -589,7 +605,7 @@ def hgemm_v3(M, N, K):
             T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
             phase_mma ^= 1
 
-        # Writeback to the correct output tile
+        # 写回当前 CTA 对应的 output tile
         Dreg = T.alloc_local((BLK_N,), acc_type)
         Dreg_f16 = T.alloc_local((BLK_N,), d_type)
         Dreg_wg = Dreg.view(128, BLK_N,
@@ -612,6 +628,6 @@ def hgemm_v3(M, N, K):
 
 ## 练习
 
-1. 在第 1 至第 3 步中，`Tx.copy` 会在 MMA 之前将 A、B tiles 搬入 SMEM。为什么 `Tx.gemm_async` 读取这些 tiles 前必须执行 `T.cuda.cta_sync()`？
+1. 在第 1 至第 3 步中，`Tx.cta.copy` 会在 MMA 之前将 A、B tiles 搬入 SMEM。为什么 `Tx.gemm_async` 读取这些 tiles 前必须执行 `T.cuda.cta_sync()`？
 2. 在第 2 步中，如果从 K-loop 删除 `phase_mma ^= 1`，会发生什么？Kernel 仍会等待每次 MMA，还是后续 wait 可能提前通过？
-3. 当 `M=N=4096`、`BLK_M=BLK_N=128` 时，第 3 步会启动多少 CTAs？邻近 CTAs 在逻辑上复用了哪些 operand tiles？第 3 步是否真正利用了这种复用？
+3. 当 `M=N=4096`、`BLK_M=BLK_N=128` 时，第 3 步的 grid shape 是多少，共启动多少个 CTAs？对于 CTA `(bx, by)`，哪些 CTAs 会独立读取相同的 A tiles，哪些会独立读取相同的 B tiles？当前 kernel 是否显式共享了这些数据？

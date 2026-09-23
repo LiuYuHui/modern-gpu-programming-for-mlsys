@@ -4,28 +4,28 @@
 :::{admonition} 本章概览
 :class: overview
 
-- 基础 GEMM 让 copy 和 compute 依次执行，但两者本可以同时工作。
-- 第 4 步改用 TMA async load；第 5 步建立双缓冲 SMEM；第 6 步加入 tile scheduler，将 kernel 改为 persistent kernel。
-- 最终目标是在 Tensor Core 计算当前 tile 时，同时加载下一块 tile。
+- 第 4 步使用 TMA 搬运 GMEM 与 SMEM 之间的 tiles：load 通过 mbarrier 等待，store 通过 async group 等待。
+- 第 5 步将 A、B buffers 改成双缓冲 SMEM ring，加入预取、stage 复用和 phase 管理，为重叠 TMA load 与 MMA 建立基础。
+- 第 6 步使用 tile scheduler 构建 persistent kernel，让固定数量的 CTAs 连续处理多个 output tiles，并改善 tile 的 L2 locality。
 :::
 
-上一章的 tiled GEMM 已经能够得到正确结果，但 Tensor Core 在大部分时间里仍处于空闲状态。Kernel 让各阶段轮流执行：threads 把 tile 搬入 shared memory，Tensor Core 完成计算；随后 threads 再搬下一块 tile，Tensor Core 只能等待。加载下一块 tile 与计算当前 tile 使用不同的硬件，本可以同时进行，却被当前顺序串行化了。
+上一章的 kernel 按照固定顺序处理每个 K tile：threads 先把 A、B 搬入 shared memory，等待所有写入完成，再发起 MMA 并等待计算结束；之后才开始加载下一块。这个执行顺序容易理解，也能得到正确结果，但数据搬运和 Tensor Core 计算无法重叠。
 
-这里不需要改变数据路径、tile layout 或数学计算，只需要改变工作何时发生，以及由谁调度。本章分三步完成这件事。第 4 步把大块 GMEM ↔ SMEM 搬运交给 TMA；第 5 步加入两级 software pipeline，使下一块 K tile 有独立的 SMEM stage 可以写入；第 6 步使用 tile scheduler 构建 persistent kernel，分摊每个 tile 的初始化开销，并选择更有利于 operand 复用的 tile 顺序。贯穿三步的新机制，是不同硬件单元之间的异步交接。
+本章将在前面三步完成的 kernel 上继续优化。第 4 步用 TMA 代替 threads 搬运 A、B tiles；第 5 步为 shared memory 准备两个 stages，建立预取和后续并发所需的 buffer 结构；第 6 步再加入 tile scheduler，让已经驻留的 CTAs 连续处理多个 output tiles。本章结束时，kernel 已经具备异步 tile 搬运、可循环复用的 SMEM stages 和 persistent scheduling。下一章会把这些阶段分配给不同的 warp 角色，使它们真正并发执行。
 
 (chap_tma_async)=
 ## 第 4 步：TMA Async Load
 
-第 1 至第 3 步中，CTA 的所有 threads 都要计算地址并发出 load/store 指令，只为了把 tiles 搬入 SMEM。这会占用本可用于其他工作的 instruction bandwidth。第 4 步用 TMA 替换同步 `Tx.copy`：一个 thread 提交命令，TMA engine 独立完成整个 tile 的传输。从这里开始，示例统一使用完整的 `M=N=K=4096` 规模；端到端时间会在 {ref}`chap_gemm_advanced` 末尾汇总。
+第 1 至第 3 步使用 `Tx.cta.copy` 搬运 A、B tiles：CTA 中的 threads 分别计算地址，再执行相应的 load 和 store。第 4 步改用 TMA，只由一个 thread 发起操作，后续的地址生成和 tile 搬运交给 TMA engine 完成。从这里开始，示例统一使用完整的 `M=N=K=4096` 规模。
 
-> **这一步改变 Dispatch**
+> **第 4 步的执行结构**
 > - Scope：不变，仍为一个 warpgroup。
 > - Layout：不变，仍使用相同的 SMEM/TMEM/register tiles。
-> - Dispatch：GMEM → SMEM load 从同步 `Tx.copy` 改为 TMA engine。
+> - Dispatch：GMEM → SMEM load 从 CTA 协作执行的 `Tx.cta.copy` 改为 TMA engine。
 
-### 如何发起 TMA
+### 发起 TMA Load
 
-虽然源代码只改了几行，但同步 copy 与 TMA 的执行模型不同。同步 `Tx.copy` 由 CTA 中的 threads 自己执行；TMA copy 则由一个 thread 发出命令，之后由 TMA hardware 完成数据搬运。下面对比两种写法。
+先对比第 3 步和第 4 步的写法。
 
 **修改前（第 3 步）**：128 个 threads 共同参与 copy，随后由 `cta_sync` 保证 shared-memory writes 可见：
 ```python
@@ -38,48 +38,46 @@ T.cuda.cta_sync()
 ```python
 tid = warp_id * 32 + lane_id                 # 0..127 within the warpgroup
 if tid == 0:  # exactly one thread starts TMA
-    Tx.copy_async(Asmem, A[...], dispatch="tma")
-    Tx.copy_async(Bsmem, B[...], dispatch="tma")
+    Tx.copy_async(Asmem, A[...], dispatch="tma_auto")
+    Tx.copy_async(Bsmem, B[...], dispatch="tma_auto")
     T.ptx.mbarrier.arrive.expect_tx(tma_bar, byte_count)  # bytes expected from TMA
 T.ptx.mbarrier.try_wait(tma_bar, phase)                  # wait before MMA reads SMEM
 ```
 
-这里使用 `tid == 0`，而不是 `elect_sync()`。`elect.sync` 会在每个 warp 中选出一个 active lane；一个 warpgroup 包含四个 warps，因此 `elect_sync()` 会让四个 threads 进入 load protocol。TMA load 需要向 mbarrier 登记一次预期 byte count；如果登记四次，计数会出错，wait 也无法按预期释放。使用 warpgroup-wide `tid` 选择唯一 thread 可以避免这个问题。
+`tid` 将 warp ID 和 lane ID 合并为 warpgroup 内的 thread ID，因此 `tid == 0` 只会选中一个 thread。若四个 warps 都直接执行 `elect_sync()`，每个 warp 都会选出一个 active lane，共有四个 threads 发起 TMA。也可以先限制 `warp_id == 0` 再使用 `elect_sync()`；这里使用 `tid == 0`，写法更直接。
 
-第 4 步仍会在每次 TMA load 后等待，因此还没有重叠 load 与 compute。这里的性能提升只来自数据搬运路径的改变：
+第 4 步仍然在每次 TMA load 后立即等待，因此 load 和 compute 还没有重叠。此时的变化只是将地址生成和 tile 搬运从 CTA threads 转交给 TMA engine，从而减少 threads 执行的搬运指令。第 5 步会加入第二个 SMEM stage，用于预取和循环复用；真正的角色级重叠会在第 7 步实现。
 
-- `Tx.copy` 使用 CTA threads 计算地址并发出 load/store 指令。
-- tensor map descriptor 描述 tensor shape、strides、tile shape 和 swizzle mode；TMA engine 根据这些信息生成地址并搬运整个 tile。
+### 等待 TMA Load 和 Store 完成
 
-即使每次 load 后仍然阻塞，TMA 也能减少 CTA threads 用于数据搬运的指令，因此这一版本仍会更快。
+TMA load 发出后，数据传输仍会在 TMA engine 中继续执行。`cta_sync()` 只能同步 CTA 中的 threads，不能判断异步传输是否已经完成。因此，MMA 在读取 SMEM tile 前，需要通过 mbarrier 等待 TMA load 完成。
 
-### TMA Load 与 Store 的同步
-
-改用 TMA 后，不仅 copy 的发起者发生变化，完成通知也不同。`Tx.cta.copy` 由 CTA threads 协作执行，之后的 `cta_sync()` 足以确认完成。TMA 则由一个选出的 thread 执行 `Tx.copy_async(..., dispatch="tma")`，engine 按自己的进度完成传输，并通过 mbarrier 通知完成。
-
-因此，`cta_sync()` 已经不够。它只等待 CTA 自己的 threads，并排序这些 threads 的 shared-memory writes，不会追踪仍在进行的 TMA transfer。TMA load 的 selected thread 需要先告诉 mbarrier 本轮预期多少 bytes，CTA 再等待这个 mbarrier；只有完成后，MMA 才能读取 SMEM tile。下图展示了这次交接：
+下图把这次交接画成一条从上到下推进的时间线。四条竖线依次表示发起 copy 的 thread、TMA engine、mbarrier 和使用数据的 MMA。图中用一个简化的例子说明协议：A、B tiles 各占 `2048 bytes`，两次 TMA load 共传输 `4096 bytes`。
 
 ![TMA Async Load 的同步流程](../../img/tma_sync_flow_zh.svg)
 
-图中，一个 selected thread 启动 TMA，mbarrier 记录预期 bytes，MMA 则在读取 SMEM 前等待 barrier 完成。图中的 “Elected Thread” 指负责启动 TMA 的 selected thread；在本节代码中，它是满足 `tid == 0` 的 thread，而不是通过 `elect_sync()` 选出的 lane。
+图的第 1、2 步发生在发起 copy 的 thread 上。它先为 A、B 各发出一次 `copy_async`，再执行 `arrive.expect_tx(4096)`。这条指令既向 mbarrier 报告该 thread 的一次 arrival，也登记接下来需要等待的 `4096 bytes` 异步传输。此时 pending arrival count 已经归零，但 pending bytes 仍为 4096，barrier 还不能完成。
 
-完整 load path 如下：selected thread 发出两次 `copy_async`，再执行 `arrive.expect_tx(total_bytes)`，登记两块 tiles 的总 byte count。Engine 完成这些 bytes 的传输后，对应的 `mbarrier.try_wait(phase)` 才会通过，此时 SMEM tile 才能安全交给 MMA。
+第 3 步由 TMA engine 完成。随着 A、B 被写入 SMEM，硬件通过 `complete_tx` 扣减 pending bytes。两次传输全部结束后，pending bytes 也变为 0。第 4 步中，consumer 的 `try_wait(phase)` 此时才能通过。到了第 5 步，MMA 才开始读取已经准备好的 A、B tiles。
 
-TMA store 使用另一套等待方式：load 通过 mbarrier 和 byte count 跟踪完成，store 则使用 commit group 和 wait group。Threads 将 fp16 结果写入 `Dsmem` 并完成同步后，一个 selected thread 启动 `Tx.copy_async(D[...], Dsmem, dispatch="tma")`，再依次执行 `cp_async.bulk.commit_group()` 和 `cp_async.bulk.wait_group(0)`，等待 store 完成。此前不能复用 `Dsmem`，否则会覆盖仍在传输的数据。
+本节 kernel 使用相同的同步过程，只是 tile 更大。A、B tiles 都包含 `128×64` 个 fp16 元素，各占 `16384 bytes`，因此 `arrive.expect_tx` 登记的总字节数是 `32768`。
 
-**使用你的 agent 练习**：追踪第 4 步中一个 K tile 的 load/store 同步。指出哪个 thread 启动每条 TMA 命令，哪个 mbarrier 或 commit group 跟踪完成状态，哪个 wait 保护 MMA 对 `Asmem`、`Bsmem` 的读取，以及哪个 wait 保护 `Dsmem` 的复用。为什么这里不能使用 `elect_sync()` 选择 TMA load 的发起者？
+TMA store 使用另一套完成机制。Threads 将结果写入 `Dsmem` 后，`fence.proxy_async` 使每个 thread 的写入对 TMA 使用的 async proxy 可见。第一次执行 `warpgroup_sync(10)` 时，程序会等待 warpgroup 的 128 个 threads 全部完成写入和 fence，随后 `tid == 0` 才发出 TMA store，再由 TMA engine 异步读取完整的 buffer。
+
+`warpgroup_sync(10)` 会 lower 为 `bar.sync 10, 128`。其中，`10` 选择 CTA 的 16 个 named-barrier slots 之一，ID 范围为 0 到 15；`128` 是 intrinsic 给出的参与同步的 thread 数。ID 10 没有特殊的 TMA 含义；这个单 warpgroup kernel 使用它，是因为当前没有其他 active named barrier 占用这个 slot。这里的 named barrier 与前面跟踪 TMA load 的 shared-memory mbarrier 属于两套机制；一次同步完成后 slot 会重置，因此可以继续复用同一个 ID。
+
+随后，`tid == 0` 的 thread 发起从 `Dsmem` 到 GMEM 的异步 copy，并执行 `cp_async.bulk.commit_group()`，把此前发出但尚未提交的 TMA stores 归入一个 bulk async group。`cp_async.bulk.wait_group(0)` 中的 `0` 表示不允许任何先前提交的 group 仍处于 pending 状态，因此它会等到这些 stores 全部完成后才返回。第二次执行 `warpgroup_sync(10)` 时会复用 ID 10，并让其他 threads 等到 `tid == 0` 对应的 thread 完成这次 store wait。在此之前，`Dsmem` 不能被覆盖或复用。
 
 ### 完整 Kernel
 
 完整 kernel 在第 3 步结构中加入 TMA load 和 store，其余部分保持不变。Imports 与前面相同：
 
 ```python
-
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 ```
 
 这个版本封装为 `hgemm_v4(M, N, K)`。Wrapper 将依赖 shape 的 constants 和 layouts 与使用它们的 kernel 放在一起。
@@ -95,9 +93,9 @@ def hgemm_v4(M, N, K):
     K_TILES = K // BLK_K
     F16_SIZE = 2
 
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
-    D_layout = tma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_N))
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
+    D_layout = mma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_N))
 
     @T.prim_func
     def kernel(
@@ -147,7 +145,7 @@ def hgemm_v4(M, N, K):
         @T.inline
         def tma_load(k_st):
             tma_config = T.meta_var({
-                "dispatch": "tma", "cta_group": 1,
+                "dispatch": "tma_auto", "cta_group": 1,
                 "mbar": tma_bar.ptr_to([0])
             })
             Tx.copy_async(Asmem[:, :],
@@ -174,49 +172,49 @@ def hgemm_v4(M, N, K):
         for k in range(K_TILES):
             k_st = T.meta_var(k * BLK_K)
 
-            # Single thread issues TMA load
+            # 由一个 thread 发起 TMA load
             if tid == 0:
                 tma_load(k_st)
 
-            # Wait for TMA to finish; the mbarrier release carries SMEM
-            # visibility to the subsequent MMA, so no extra fence is needed.
+            # 等待 TMA 完成；mbarrier 提供后续 MMA 读取 SMEM 所需的可见性，
+            # 因此这里不需要额外的 fence。
             T.ptx.mbarrier.try_wait(tma_bar.ptr_to([0]), phase_tma)
 
-            # Single thread issues MMA
+            # 由一个 thread 发起 MMA
             if tid == 0:
                 mma(accum=k != 0)
 
-            # Wait for MMA to finish
+            # 等待 MMA 完成
             T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
             phase_tma ^= 1
             phase_mma ^= 1
 
-        # --- TMA Store Writeback ---
+        # --- 使用 TMA store 写回 ---
         Dreg = T.alloc_local((BLK_N,), acc_type)
         Dreg_f16 = T.alloc_local((BLK_N,), d_type)
         Dreg_wg = Dreg.view(128, BLK_N,
                             layout=TileLayout(S[(128, BLK_N) : (1@tid_in_wg, 1)]))
 
-        # Read TMEM -> registers (async; wait.ld then cta_sync to ensure read completes)
+        # 异步读取 TMEM -> registers；先执行 wait.ld，再用 cta_sync 同步 threads
         Tx.wg.copy_async(Dreg_wg[:, :], tmem[:, :BLK_N])
         T.ptx.tcgen05.wait.ld()
         T.cuda.cta_sync()
-        # Cast fp32 -> fp16
+        # 转换 fp32 -> fp16
         Tx.cast(Dreg_f16[:], Dreg[:])
-        # Write registers -> Dsmem, flush, then sync
+        # 写入 registers -> Dsmem，建立可见性后再同步
         Tx.copy(Dsmem[warp_id * 32 + lane_id, 0:BLK_N], Dreg_f16[:])
         T.ptx.fence.proxy_async("shared::cta")
         T.cuda.warpgroup_sync(10)
-        # TMA store: Dsmem -> GMEM. One selected thread starts the store and drains the
-        # store group before Dsmem is reused.
+        # TMA store：Dsmem -> GMEM。一个 selected thread 发起 store；
+        # 复用 Dsmem 前必须等待该 store group 完成。
         if tid == 0:
             Tx.copy_async(D[m_st : m_st + BLK_M, n_st : n_st + BLK_N],
-                          Dsmem[:, :], dispatch="tma")
+                          Dsmem[:, :], dispatch="tma_auto")
             T.ptx.cp_async.bulk.commit_group()
             T.ptx.cp_async.bulk.wait_group(0)
         T.cuda.warpgroup_sync(10)
 
-        # --- Deallocate TMEM ---
+        # --- 释放 TMEM ---
         T.cuda.cta_sync()
         if warp_id == 0:
             T.ptx.tcgen05.relinquish_alloc_permit(cta_group=1)
@@ -229,7 +227,7 @@ def hgemm_v4(M, N, K):
 
 这个 kernel 的大部分结构来自第 3 步。真正决定 TMA 语义的是下面五处配置：
 
-- **TMA config**：`{"dispatch": "tma", "cta_group": 1, "mbar": tma_bar.ptr_to([0])}` 指定 `Tx.copy_async` 使用 TMA，并通过 `tma_bar` 报告 load 完成。
+- **TMA config**：`{"dispatch": "tma_auto", "cta_group": 1, "mbar": tma_bar.ptr_to([0])}` 指定 `Tx.copy_async` 使用自动 TMA dispatch，并通过 `tma_bar` 报告 load 完成。
 
 - **Byte count**：`(BLK_M * BLK_K + BLK_N * BLK_K) * 2` 是两块 fp16 operand tiles 的总 byte 数；`arrive.expect_tx(...)` 将该数值登记到 mbarrier。
 
@@ -244,9 +242,9 @@ def hgemm_v4(M, N, K):
 (chap_software_pipeline)=
 ## 第 5 步：Software Pipeline（`PIPE_DEPTH=2`）
 
-第 4 步无法重叠 load 与 compute，原因在于 SMEM 中只有一对 operand tiles。下一次 load 没有独立位置可以写入；如果提前开始，就会覆盖当前 MMA 仍在读取的数据。第 5 步通过 shared memory 双缓冲解决这个存储冲突。当前单 warpgroup loop 仍会等待每次 MMA，再发起下一次 TMA load，但现在已经有独立 stages 可用于预取和循环复用。问题规模仍为 `M=N=K=4096`。
+第 4 步无法重叠 load 与 compute，原因在于 SMEM 中只有一对 operand tiles。下一次 load 没有独立位置可以写入；如果提前开始，就会覆盖当前 MMA 仍在读取的数据。第 5 步通过 shared memory 双缓冲解决这个存储冲突。当前单 warpgroup loop 仍会等待每次 MMA，再发起下一次 TMA load，但现在已经有独立 stages 可用于预取和循环复用。
 
-> **这一步改变 Layout**
+> **第 5 步的执行结构**
 > - Scope：不变，仍为一个 warpgroup。
 > - Layout：单个 SMEM tile pair 改为包含 `PIPE_DEPTH` 个 stages 的 ring buffer。
 > - Dispatch：不变，仍使用 TMA load 和 `tcgen05` MMA。本步加入 prefetch 和 stage 复用；完整的 load/compute 重叠会在第 7 步实现。
@@ -284,25 +282,26 @@ phase_mma ^= 1
 tma_load(stage, next_k * BLK_K)
 ```
 
-**3. Phase 管理**：前面的异步同步章节已经说明，同一个 mbarrier 每完成一轮，phase 就会翻转。这里的两个 phase 变量更新频率不同，是因为它们保护的资源数量不同。MMA accumulator 只有一个 TMEM slot，因此所有 iterations 都复用同一个 `mma_bar`（`mma_bar.ptr_to([0])），`phase_mma` 每轮都需要翻转。TMA 则为每个 stage 分配一个 barrier；同一个 stage 的 barrier 只有在 ring buffer 绕回时才会再次使用，因此 `phase_tma` 只在 stage index 完成一轮时翻转：
+**3. Phase 管理**：前面的异步同步章节已经说明，同一个 mbarrier 每完成一轮，phase 就会翻转。这里的两个 phase 变量更新频率不同，是因为它们分别跟踪一个 MMA accumulator 和多个 SMEM stages。
+
+所有 K iterations 都通过 `mma_bar.ptr_to([0])` 跟踪同一个 TMEM accumulator，因此 `phase_mma` 每轮都要翻转。TMA 则为每个 SMEM stage 分配一个 barrier；只有 ring buffer 再次使用同一个 stage 时，对应的 barrier 才会进入下一轮。因此，`phase_tma` 在 stage index 到达 ring buffer 末尾后翻转，供下一轮从 stage 0 开始时使用：
 ```python
 if stage == PIPE_DEPTH - 1:
     phase_tma ^= 1
 ```
 
-**使用你的 agent 练习**：取 `PIPE_DEPTH=2`、`K_TILES=5`，追踪 main loop。对每个 `k`，列出 `stage`、传给 waits 的 `phase_tma` 和 `phase_mma`，以及是否发起新的 prefetch。`phase_tma` 在哪里翻转？为什么最后两个 iterations 不会再 prefetch？
+**Pipeline 推演**：取 `PIPE_DEPTH=2`、`K_TILES=5`，追踪 main loop。对每个 `k`，列出 `stage`、传给 waits 的 `phase_tma` 和 `phase_mma`，以及是否发起新的 prefetch。`phase_tma` 在哪里翻转？为什么最后两个 iterations 不会再 prefetch？
 
 ### 完整 Kernel
 
-完整 kernel 保留第 4 步的 TMA load/store path，并加入 staged buffers 和 phase logic。Imports 不变：
+完整 kernel 保留第 4 步的 TMA load/store path，并加入上面介绍的 staged buffers 和 phase logic。Imports 不变：
 
 ```python
-
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 ```
 
 这个版本封装为 `hgemm_v5(M, N, K)`。`PIPE_DEPTH=2` 指定两个 pipeline stages，也就是双缓冲：
@@ -319,12 +318,12 @@ def hgemm_v5(M, N, K):
     BLK_M, BLK_N, BLK_K = 128, 128, 64
     K_TILES = K // BLK_K
 
-    # Double-buffered layouts: first dimension is pipeline stage
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    # 双缓冲 layout：第一维表示 pipeline stage
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (PIPE_DEPTH, BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (PIPE_DEPTH, BLK_N, BLK_K))
-    D_layout = tma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    D_layout = mma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (BLK_M, BLK_N))
 
     @T.prim_func
@@ -342,7 +341,7 @@ def hgemm_v5(M, N, K):
         # --- SMEM allocation ---
         pool = T.SMEMPool()
         tmem_addr = pool.alloc((1,), "uint32")
-        # Double-buffered TMA barriers (one per stage), single MMA barrier
+        # 每个双缓冲 stage 使用一个 TMA barrier；所有 stages 共用一个 MMA barrier
         tma_bar = pool.alloc((PIPE_DEPTH,), "uint64", align=8)
         mma_bar = pool.alloc((1,), "uint64", align=8)
         pool.move_base_to(1024)
@@ -351,7 +350,7 @@ def hgemm_v5(M, N, K):
         Dsmem = pool.alloc((BLK_M, BLK_N), d_type, layout=D_layout)
         pool.commit()
 
-        # Initialize barriers: PIPE_DEPTH for TMA, 1 for MMA
+        # 初始化 barriers：TMA 使用 PIPE_DEPTH 个，MMA 使用 1 个
         if warp_id == 0:
             if lane_id == 0:
                 T.ptx.mbarrier.init(mma_bar.ptr_to([0]), 1)
@@ -377,7 +376,7 @@ def hgemm_v5(M, N, K):
         @T.inline
         def tma_load(stage, k_offset):
             tma_config = T.meta_var({
-                "dispatch": "tma", "cta_group": 1,
+                "dispatch": "tma_auto", "cta_group": 1,
                 "mbar": tma_bar.ptr_to([stage])
             })
             Tx.copy_async(Asmem[stage, :, :],
@@ -407,23 +406,23 @@ def hgemm_v5(M, N, K):
         for k in range(K_TILES):
             stage = k % PIPE_DEPTH
 
-            # Wait for TMA to finish loading this stage
+            # 等待 TMA 完成当前 stage 的加载
             T.ptx.mbarrier.try_wait(tma_bar.ptr_to([stage]), phase_tma)
 
-            # MMA on this stage's data
+            # 使用当前 stage 的数据执行 MMA
             if tid == 0:
                 mma(stage, accum=(k != 0))
 
             T.ptx.mbarrier.try_wait(mma_bar.ptr_to([0]), phase_mma)
             phase_mma ^= 1
 
-            # Issue next prefetch load (k + PIPE_DEPTH)
+            # 发起下一次 prefetch（k + PIPE_DEPTH）
             next_k = k + PIPE_DEPTH
             if next_k < K_TILES:
                 if tid == 0:
                     tma_load(stage, next_k * BLK_K)
 
-            # TMA phase flips when stage wraps around
+            # 到达最后一个 stage 后翻转 TMA phase，供下一轮 ring 使用
             if stage == PIPE_DEPTH - 1:
                 phase_tma ^= 1
 
@@ -441,12 +440,12 @@ def hgemm_v5(M, N, K):
         T.cuda.warpgroup_sync(10)
         if tid == 0:
             Tx.copy_async(D[m_st : m_st + BLK_M, n_st : n_st + BLK_N],
-                          Dsmem[:, :], dispatch="tma")
+                          Dsmem[:, :], dispatch="tma_auto")
             T.ptx.cp_async.bulk.commit_group()
             T.ptx.cp_async.bulk.wait_group(0)
         T.cuda.warpgroup_sync(10)
 
-        # Deallocate TMEM
+        # 释放 TMEM
         T.cuda.cta_sync()
         if warp_id == 0:
             T.ptx.tcgen05.relinquish_alloc_permit(cta_group=1)
@@ -462,37 +461,37 @@ def hgemm_v5(M, N, K):
 
 第 5 步为每个 $128\times128$ output tile 启动一个 CTA。对于 $4096\times4096$ 的输出，一共需要 1024 个 CTAs。每个 CTA 都要单独完成初始化，计算完一个 tile 后便退出。
 
-Persistent kernel 则只启动固定数量的 CTAs，让每个 CTA 依次处理多个 tiles。这样做有两个好处：初始化开销可以分摊到多个 tiles 上；tile 的分配也转移到了 kernel 内部，scheduler 可以按有利于复用 operands 的顺序安排工作。问题规模仍为 `M=N=K=4096`。
+Persistent kernel 则只启动固定数量的 CTA，让每个 CTA 依次处理多个 tiles。这样做有两个好处：初始化开销可以分摊到多个 tiles 上；tile 的分配也转移到了 kernel 内部，scheduler 可以按有利于复用 operands 的顺序安排工作。
 
-> **这一步改变 Scope**
+> **第 6 步的执行结构**
 > - Scope：固定数量的 persistent CTAs，每个 CTA 通过 scheduler 循环处理多个 output tiles。
 > - Layout：不变，每个 tile 仍使用相同的 SMEM、TMEM 和 register 数据路径。
 > - Dispatch：不变。
 
 ### Persistent Scheduling
 
-Persistent kernel 的 grid 大小由硬件规模决定，而不是由 output tile 数量决定。这里启动 `SM_COUNT` 个 CTAs，目标是让每个 SM 大致对应一个长期运行的 CTA，并持续从 scheduler 获取工作。实际是否严格一一对应，还取决于 occupancy 和硬件调度。
+Persistent kernel 使用一个较小的一维 grid。本例设置 `SM_COUNT=148`，因此启动 148 个 persistent CTAs。每个 CTA 从 scheduler 获取一个 output tile，完成后再获取下一个，直到所有 tiles 都处理完毕。`SM_COUNT` 决定 kernel 启动多少个 persistent CTAs。任一时刻能有多少 CTAs 驻留、它们在哪些 SM 上执行，由 occupancy 和硬件调度决定；CTA 不会与某个 SM 固定绑定。
 
-本章以包含 148 个 SMs 的 B200 为例，因此取 `SM_COUNT=148`。这 148 个 CTAs 分别循环处理 `ClusterPersistentScheduler2D` 分配的 tiles。
+由于一个 CTA 会连续处理多个 tiles，它只需申请一次 TMEM、初始化一次 barriers，并创建一次 scheduler state。这些资源可以一直保留到该 CTA 完成全部任务。
 
-首先，TMEM allocation、barrier initialization 和 scheduler state 只需为每个 persistent CTA 建立一次，随后可供它处理的多个 tiles 复用，不必由 1024 个短生命周期 CTAs 分别重复完成。
-
-其次，scheduler 可以调整 tiles 的处理顺序。设置 `l2_group_size=8` 后，相邻 tiles 会被分到同一组：共享 row band 的 tiles 可以复用 A row tiles，共享 column band 的 tiles 可以复用 B tiles。连续处理这些 tiles，有助于让 operands 留在 L2 中，减少从 HBM 重复读取的数据量。这正是第 3 步尚未利用的跨 tile 复用。
+Scheduler 还会调整 tiles 的逻辑编号顺序。`l2_group_size=8` 表示把 M 方向上连续 8 行 output tiles 分为一组。组内先固定一个 N tile column，让 tile IDs 沿这 8 行递增，再移动到下一个 N tile column。这样，共用同一个 B tile 的任务在调度顺序中彼此接近，同一组 A tiles 也会在较短区间内再次出现。各 CTA 仍然独立搬运数据，硬件实际执行顺序也可能不同，但这种编号方式更有利于 L2 cache 复用。
 
 ```python
-bx = T.cta_id([SM_COUNT])  # 1D grid, one CTA per SM
+bx = T.cta_id([SM_COUNT])  # 1D persistent grid
 
 tile_scheduler = ClusterPersistentScheduler2D(
     "ts",
     num_m_tiles=M // BLK_M,
     num_n_tiles=N // BLK_N,
-    l2_group_size=8,       # Group 8 nearby tiles together
+    l2_group_size=8,
     num_clusters=SM_COUNT
 )
 tile_scheduler.init(bx)
 ```
 
-循环处理多个 tiles 时，还要注意 barrier phase。当前示例固定使用 `K=4096`、`BLK_K=64` 和 `PIPE_DEPTH=2`：每个 output tile 包含 64 次 MMA，两个 TMA stage barriers 各被复用 32 次。因此一个 tile 结束后，相关 barriers 都恰好回到初始 parity，可以在下一轮把本地 phase variables 重新设为 0：
+CTA 开始处理下一块 output tile 时，还会继续使用同一组 TMA 和 MMA barriers，因此本地记录的 phase parity 必须与 barrier 的当前状态一致。
+
+当前参数下，每个 output tile 包含 64 次 K iterations。`mma_bar` 使用 64 次，两个 TMA stage barriers 各使用 32 次。由于这些次数都是偶数，处理完一个 tile 后，各 barrier 都回到初始 parity，下一块 tile 可以重新从 0 开始：
 
 ```python
 while tile_scheduler.valid():
@@ -501,23 +500,22 @@ while tile_scheduler.valid():
     ...
 ```
 
-这个重置依赖上述 iteration 次数。若修改 `K`、`BLK_K` 或 pipeline depth，使某个 barrier 在一个 output tile 内被使用奇数次，就不能直接重置为 0；kernel 必须保留上一块 tile 结束时的 parity，或者根据已执行的轮数计算下一次应等待的值。下面的 wrapper 用 assertion 限定当前实现支持的参数组合。
+如果修改 `K`、`BLK_K` 或 `PIPE_DEPTH`，使某个 barrier 的使用次数变为奇数，就不能直接将对应的 phase parity 重置为 0。当前 wrapper 使用 assertion 限定了支持的参数组合。
 
 ### 完整 Kernel
 
-从结构上看，这个 kernel 只是在第 5 步的 pipeline 外增加了一层 tile loop。新增的依赖只有 scheduler：
+第 6 步保留第 5 步的 staged K-loop，并在外层加入 output-tile loop。新增的依赖只有 scheduler：
 
 ```python
-
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
-from tvm.tirx.lang.tile_scheduler import ClusterPersistentScheduler2D
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
+from tvm.backend.cuda.lang.tile_scheduler import ClusterPersistentScheduler2D
 ```
 
-Grid dimension 由 `(M//BLK_M, N//BLK_N)` 改为 `SM_COUNT`，每个 CTA 要处理的 tile 则由 `ClusterPersistentScheduler2D` 分配：
+Launch grid 不再为每个 `(M, N)` output tile 启动一个 CTA，而是只包含 `SM_COUNT` 个 CTAs。`ClusterPersistentScheduler2D` 负责为这些 persistent CTAs 分配 tiles：
 
 ```python
 SM_COUNT = 148  # Number of SMs on NVIDIA B200 GPU
@@ -536,11 +534,11 @@ def hgemm_v6(M, N, K):
         "K_TILES must be divisible by 2 * PIPE_DEPTH"
     )
 
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (PIPE_DEPTH, BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (PIPE_DEPTH, BLK_N, BLK_K))
-    D_layout = tma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM,
+    D_layout = mma_shared_layout(d_type, SwizzleMode.SWIZZLE_128B_ATOM,
                                   (BLK_M, BLK_N))
 
     @T.prim_func
@@ -583,7 +581,7 @@ def hgemm_v6(M, N, K):
             layout=TileLayout(S[(128, 512) : (1@TLane, 1@TCol)])
         )
 
-        # Tile scheduler: assigns tiles to CTAs in L2-friendly order
+        # Tile scheduler：按有利于 L2 locality 的顺序将 tiles 分配给 CTAs
         tile_scheduler = ClusterPersistentScheduler2D(
             "ts",
             num_m_tiles=M // BLK_M,
@@ -598,7 +596,7 @@ def hgemm_v6(M, N, K):
         @T.inline
         def tma_load(stage, k_offset, m_st, n_st):
             tma_config = T.meta_var({
-                "dispatch": "tma", "cta_group": 1,
+                "dispatch": "tma_auto", "cta_group": 1,
                 "mbar": tma_bar.ptr_to([stage])
             })
             Tx.copy_async(Asmem[stage, :, :],
@@ -619,7 +617,7 @@ def hgemm_v6(M, N, K):
 
         # === Outer loop: iterate over tiles ===
         while tile_scheduler.valid():
-            # Get current tile position from scheduler
+            # 从 scheduler 取得当前 tile 坐标
             m_st = T.meta_var(tile_scheduler.m_idx * BLK_M)
             n_st = T.meta_var(tile_scheduler.n_idx * BLK_N)
 
@@ -627,7 +625,7 @@ def hgemm_v6(M, N, K):
             phase_tma: T.int32 = 0
             phase_mma: T.int32 = 0
 
-            # Prefetch first PIPE_DEPTH stages
+            # 预取最初的 PIPE_DEPTH 个 stages
             if tid == 0:
                 for s in range(min(PIPE_DEPTH, K_TILES)):
                     tma_load(s, s * BLK_K, m_st, n_st)
@@ -661,7 +659,7 @@ def hgemm_v6(M, N, K):
             T.cuda.warpgroup_sync(10)
             if tid == 0:
                 Tx.copy_async(D[m_st : m_st + BLK_M, n_st : n_st + BLK_N],
-                              Dsmem[:, :], dispatch="tma")
+                              Dsmem[:, :], dispatch="tma_auto")
                 T.ptx.cp_async.bulk.commit_group()
                 T.ptx.cp_async.bulk.wait_group(0)
             T.cuda.warpgroup_sync(10)
@@ -669,7 +667,7 @@ def hgemm_v6(M, N, K):
             T.cuda.cta_sync()
             tile_scheduler.next_tile()  # Move to next tile
 
-        # Deallocate TMEM
+        # 释放 TMEM
         T.cuda.cta_sync()
         if warp_id == 0:
             T.ptx.tcgen05.relinquish_alloc_permit(cta_group=1)

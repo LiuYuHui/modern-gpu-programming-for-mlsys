@@ -178,7 +178,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="appendix/index.html">Overview</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="tirx_guide/language_reference/index.html">TIRx Language Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -189,11 +189,12 @@
 <li class="toctree-l2"><a class="reference internal" href="tirx_guide/language_reference/cuda/threads_sync.html">CUDA C++/PTX intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="tirx_guide/arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="tirx_guide/arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tirx_guide/arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -388,31 +389,33 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="modern-gpu-programming-for-mlsys">
 <h1>Modern GPU Programming For MLSys<a class="headerlink" href="#modern-gpu-programming-for-mlsys" title="Link to this heading">#</a></h1>
-<p>Machine learning systems sit at the heart of modern AI workloads. In these systems, performance
-often comes down to the quality of a small number of GPU kernels. Attention kernels, LLM prefill
-and decode kernels, low-precision block-scaled GEMMs, fused MoE layers, and other large fused
-kernels all directly shape end-to-end speed in both training and serving.</p>
-<p>To make these kernels fast, however, we need more than a list of optimization tricks. Modern GPUs
-are no longer simple variations of the same old design. Recent architectures introduce richer
-memory spaces, new access patterns, and increasingly specialized execution units. To program them
-well, we need both a clear mental model of the hardware and a practical understanding of how
-high-performance kernels are built. This book is about developing both.</p>
-<p>The book follows a simple progression: first understand the GPU hardware, then learn the
-programming model we will use, and finally build state-of-the-art kernels step by step. Our main
-target is the Blackwell generation, and our main running examples are General Matrix-Matrix
-Multiplication (GEMM) and FlashAttention. Along the way, we will also study the core ingredients
-behind GPU optimization: data layout, asynchronous data movement, and asynchronous coordination.</p>
-<p>The material grows out of the <a class="reference external" href="https://mlsyscourse.org/">Machine Learning Systems</a> course series
-at Carnegie Mellon University. To make the ideas easier to study and easier to run, this book uses
-the <strong>TIRx</strong> Python DSL to build real GPU kernel examples step by step. TIRx stays close to the
-hardware, which lets us reason about low-level control while still learning through runnable code.</p>
+<p>Machine learning systems power many of today’s AI workloads. As models grow and deployment
+settings become more complex, end-to-end performance increasingly depends on a small number of
+critical GPU kernels. Attention, LLM prefill and decode, low-precision block-scaled GEMM, fused MoE
+layers, and other large fused kernels directly affect both training and serving speed.</p>
+<p>Making these kernels fast requires more than a list of optimization tricks. Recent GPU
+architectures introduce richer memory spaces, new data-movement mechanisms, and increasingly
+specialized execution units. Using them effectively requires both a clear understanding of how the
+hardware executes a program and practical knowledge of how a basic kernel evolves into a
+high-performance implementation. This book develops both.</p>
+<p>The book proceeds from hardware to programming model to complete kernels. It first introduces GPU
+organization and execution, then presents the programming model used throughout the book, and
+finally builds high-performance kernels step by step. The main target is NVIDIA Blackwell, and the
+running examples are General Matrix-Matrix Multiplication (GEMM) and FlashAttention. Along the way,
+the book develops the key ideas behind GPU optimization: data layout, asynchronous data movement,
+and asynchronous coordination.</p>
+<p>The material grows out of the <a class="reference external" href="https://mlsyscourse.org/">Machine Learning Systems</a> course series at
+Carnegie Mellon University. The examples use the <strong>TIRx</strong> Python DSL so that the ideas can be
+studied, run, and verified in real kernels. TIRx keeps hardware-level choices explicit, making it
+possible to reason about control flow, memory access, and synchronization while working with
+runnable code.</p>
 <p>This book is open source. Contributions, corrections, and examples are welcome through the
 <a class="reference external" href="https://github.com/mlc-ai/modern-gpu-programming-for-mlsys">GitHub repository</a>.</p>
 <section id="how-this-book-is-organized">
 <h2>How This Book Is Organized<a class="headerlink" href="#how-this-book-is-organized" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p><strong>Part I, Understanding the GPU.</strong> This part introduces the overall organization of the GPU,
-general recipes for writing fast kernels, and key concepts such as data layout, asynchronous
+general techniques for writing fast kernels, and key concepts such as data layout, asynchronous
 memory operations, and coordination. It builds the hardware intuition that the rest of the book
 relies on.</p></li>
 <li><p><strong>Part II, TIRx Overview.</strong> This part introduces the key elements of TIRx, which serve as the
@@ -421,7 +424,8 @@ foundation for the code examples throughout the book.</p></li>
 TMA pipelining, persistent scheduling, warp specialization, and 2-CTA clusters.</p></li>
 <li><p><strong>Part IV, Flash Attention 4.</strong> A complete attention kernel built from the Part III techniques:
 two MMAs with softmax between them, online-softmax rescaling, causal masking, and GQA.</p></li>
-<li><p><strong>Reference.</strong> TIRx language reference and compiler internals.</p></li>
+<li><p><strong>Appendices.</strong> TIRx language reference, a reproducible GPU benchmarking and profiling workflow,
+compiler internals, and a guide to debugging asynchronous kernels.</p></li>
 </ul>
 <div class="toctree-wrapper compound">
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part I, Understanding the GPU</span></p>
@@ -464,10 +468,10 @@ two MMAs with softmax between them, online-softmax rescaling, causal masking, an
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="chapter_gemm_advanced/index.html">Scaling GEMM with Warp Specialization and Clusters</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#step-7-warp-specialization-pipeline">Step 7: Warp Specialization + Pipeline</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#step-8-2-cta-cluster">Step 8: 2-CTA Cluster</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#step-7-warp-specialization">Step 7: Warp Specialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#step-8-two-cta-cluster">Step 8: Two-CTA Cluster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#step-9-multi-consumer-warp-specialization">Step 9: Multi-Consumer Warp Specialization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#end-to-end-result">End-to-End Result</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#end-to-end-results">End-to-End Results</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_gemm_advanced/index.html#exercises">Exercises</a></li>
 </ul>
 </li>
@@ -477,32 +481,32 @@ two MMAs with softmax between them, online-softmax rescaling, causal masking, an
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Part IV, Flash Attention 4</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="chapter_flash_attention/index.html">Flash Attention 4</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#algorithm-shape">Algorithm Shape</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#tile-primitive-graph">Tile-Primitive Graph</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#warp-roles-and-scopes">Warp Roles and Scopes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#reading-the-fragments">Reading the Fragments</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#the-two-mma-phases">The Two MMA Phases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#algorithm-structure">Algorithm Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#tile-primitive-data-flow">Tile Primitive Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#warp-roles-and-scope">Warp Roles and Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#conventions-for-reading-the-code">Conventions for Reading the Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#qk-mma-and-pv-mma">QKᵀ MMA and PV MMA</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#tmem-layout-and-reuse">TMEM Layout and Reuse</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#how-barriers-connect-the-roles">How Barriers Connect the Roles</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#pipelining-structure">Pipelining Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#key-barrier-protocols">Key Barrier Protocols</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#pipeline-timeline">Pipeline Timeline</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#rescaling-and-writeback">Rescaling and Writeback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#causal-masking">Causal Masking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#gqa-support">GQA Support</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#tile-scheduling">Tile Scheduling</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#compile-and-verify">Compile and Verify</a></li>
-<li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#differences-from-gemm">Differences from GEMM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="chapter_flash_attention/index.html#exercises">Exercises</a></li>
 </ul>
 </li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="appendix/index.html">Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tirx_guide/language_reference/index.html">TIRx Language Reference</a></li>
-<li class="toctree-l1"><a class="reference internal" href="appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tirx_guide/arch/index.html">Compiler Internals</a></li>
+<li class="toctree-l1"><a class="reference internal" href="appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 </div>
 </section>

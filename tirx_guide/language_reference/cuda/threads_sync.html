@@ -53,7 +53,7 @@
     <link rel="icon" href="../../../_static/mlc-favicon.ico"/>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
-    <link rel="next" title="Debugging Warp-Specialized Kernels" href="../../../appendix/debugging_warp_specialized.html" />
+    <link rel="next" title="Measuring and Analyzing GPU Kernel Performance" href="../../../appendix/benchmarking_gpu_kernels.html" />
     <link rel="prev" title="Control flow" href="control_flow.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -177,7 +177,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Appendices</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../appendix/index.html">Overview</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="../index.html">TIRx Language Reference</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
@@ -188,11 +188,12 @@
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">CUDA C++/PTX intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../appendix/benchmarking_gpu_kernels.html">Measuring and Analyzing GPU Kernel Performance</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../arch/index.html">Compiler Internals</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../arch/lowering_pipeline.html">TIRx lowering pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../appendix/debugging_warp_specialized.html">Debugging Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -323,7 +324,7 @@
 
 
 
-<button onclick="window.location.href='../../../zh/index.html'"
+<button onclick="window.location.href='../../../zh/tirx_guide/language_reference/cuda/threads_sync.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="切换到中文版"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -387,8 +388,8 @@
                   
   <section id="cuda-c-ptx-intrinsics">
 <h1>CUDA C++/PTX intrinsics<a class="headerlink" href="#cuda-c-ptx-intrinsics" title="Link to this heading">#</a></h1>
-<p>When no tile primitive covers what you need, two escape hatches reach the hardware
-directly: <strong>call a backend intrinsic</strong> (the <code class="docutils literal notranslate"><span class="pre">T.cuda.*</span></code> / <code class="docutils literal notranslate"><span class="pre">T.ptx.*</span></code> namespaces
+<p>When no tile primitive covers the required operation, two lower-level options are
+available: <strong>call a backend intrinsic</strong> (the <code class="docutils literal notranslate"><span class="pre">T.cuda.*</span></code> / <code class="docutils literal notranslate"><span class="pre">T.ptx.*</span></code> namespaces
 from <code class="docutils literal notranslate"><span class="pre">tvm.backend.cuda</span></code>), or <strong>inline raw CUDA</strong> source.</p>
 <section id="calling-backend-intrinsics">
 <h2>Calling backend intrinsics<a class="headerlink" href="#calling-backend-intrinsics" title="Link to this heading">#</a></h2>
@@ -437,9 +438,10 @@ misusing any of them usually leads to silent corruption or deadlock.</p>
 The <code class="docutils literal notranslate"><span class="pre">T.ptx.mbarrier.try_wait(bar,</span> <span class="pre">phase)</span></code> intrinsic blocks until the barrier’s
 internal phase <em>differs</em> from the <code class="docutils literal notranslate"><span class="pre">phase</span></code> argument provided by the caller.
 Consequently, when reusing a barrier across loop iterations, the caller must flip
-its local phase tracker (<code class="docutils literal notranslate"><span class="pre">phase</span> <span class="pre">^=</span> <span class="pre">1</span></code>) after every wait. Failing to do so causes
-subsequent waits to return immediately, allowing the engine to read half-written
-memory. <a class="reference internal" href="../../../chapter_gemm_basics/index.html#chap-gemm-basics"><span class="std std-ref">Building a Tiled GEMM</span></a> walks through the full phase-tracking table.</p>
+its local phase tracker (<code class="docutils literal notranslate"><span class="pre">phase</span> <span class="pre">^=</span> <span class="pre">1</span></code>) after every wait. Failing to do so can
+cause a later wait to return for an earlier phase, allowing a consumer to access
+data before the current producer or asynchronous operation has finished.
+<a class="reference internal" href="../../../chapter_gemm_basics/index.html#chap-gemm-basics"><span class="std std-ref">Building a Tiled GEMM</span></a> walks through the full phase-tracking table.</p>
 <p><strong>Election.</strong> <code class="docutils literal notranslate"><span class="pre">T.ptx.elect_sync()</span></code> elects a <em>single active lane within a warp</em>,
 not lane 0, and not one thread per CTA. To narrow an issuer down to exactly one
 thread, you must pair it with a warp-level guard. The pattern <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">warp_id</span> <span class="pre">==</span> <span class="pre">0:</span></code>
@@ -450,9 +452,10 @@ requires <em>every</em> CTA thread to arrive. Once warpgroups specialize onto di
 code paths, placing a <code class="docutils literal notranslate"><span class="pre">cta_sync()</span></code> inside a warpgroup branch deadlocks the kernel
 because the other warpgroups never reach it. The hardware provides 16 named
 barriers (IDs 0 to 15); <code class="docutils literal notranslate"><span class="pre">T.cuda.warpgroup_sync(10)</span></code> synchronizes only the threads
-of one warpgroup. Distinct warpgroups take distinct IDs (e.g.,
-<code class="docutils literal notranslate"><span class="pre">warpgroup_sync(wg_id</span> <span class="pre">+</span> <span class="pre">10)</span></code>) so they never collide on the same hardware barrier.
-See <a class="reference internal" href="../../../chapter_gemm_advanced/index.html#chap-gemm-advanced"><span class="std std-ref">Scaling GEMM with Warp Specialization and Clusters</span></a>.</p>
+of one warpgroup. Independent synchronizations that may be active at the same time
+must use distinct IDs (for example, <code class="docutils literal notranslate"><span class="pre">warpgroup_sync(wg_id</span> <span class="pre">+</span> <span class="pre">10)</span></code>). An ID may be
+reused after the preceding synchronization that used it has completed. See
+<a class="reference internal" href="../../../chapter_gemm_advanced/index.html#chap-gemm-advanced"><span class="std std-ref">Scaling GEMM with Warp Specialization and Clusters</span></a>.</p>
 <p><strong>Fences.</strong> Fences order a producer’s writes before a consumer (often an
 asynchronous engine) reads them:</p>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -473,7 +476,7 @@ asynchronous engine) reads them:</p>
 <td><p>mbarrier initialization before later arrivals or waits use the barrier</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">T.ptx.tcgen05.fence.after_thread_sync()</span></code></p></td>
-<td><p>a conservative ordering fence on the <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> writeback edge (Steps 8 and 9 add it; it is not needed on the TMA-to-MMA path)</p></td>
+<td><p>a conservative ordering fence on the <code class="docutils literal notranslate"><span class="pre">tcgen05</span></code> writeback edge (Steps 7–9 add it; it is not needed on the TMA-to-MMA path)</p></td>
 </tr>
 </tbody>
 </table>
@@ -525,11 +528,11 @@ source string with <code class="docutils literal notranslate"><span class="pre">
       </div>
     </a>
     <a class="right-next"
-       href="../../../appendix/debugging_warp_specialized.html"
+       href="../../../appendix/benchmarking_gpu_kernels.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Debugging Warp-Specialized Kernels</p>
+        <p class="prev-next-title">Measuring and Analyzing GPU Kernel Performance</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

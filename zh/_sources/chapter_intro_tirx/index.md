@@ -15,7 +15,7 @@
 本章示例需要 Blackwell GPU（`sm_100a`，例如 B200）、TIRx 编译器和支持 CUDA 的 PyTorch。TIRx 位于 Apache TVM wheel 的 `tvm.tirx` 模块中；通过 NVRTC 编译 CUDA 代码时还需要 `cuda-bindings`，可以一起安装：
 
 ```bash
-pip install apache-tvm cuda-bindings
+pip install apache-tvm==0.26.0 cuda-bindings
 ```
 
 安装后可以运行下面的命令，确认 TVM 和 TIRx 能够正常导入：
@@ -65,7 +65,7 @@ D:   tcgen05.mma -> TMEM -> registers -> GMEM
 3. 通过 `Tx.gemm_async` 发起 MMA；
 4. 将结果从 TMEM 读回 registers，再写入 GMEM。
 
-其中最关键的三项 tile 操作是 `Tx.cta.copy`、`Tx.gemm_async` 和 `Tx.wg.copy_async`。其余 PTX 调用用于申请和释放 TMEM、初始化 barrier 并建立同步；本章先把它们看作完成这几个阶段所需的底层步骤。
+其中最关键的三项 tile 操作是 `Tx.cta.copy`、`Tx.gemm_async` 和 `Tx.wg.copy_async`。其余底层调用用于申请和释放 TMEM、初始化 barrier 并建立同步；本章先把它们看作完成这几个阶段所需的实现步骤。
 
 先导入这个 kernel 使用的模块：
 
@@ -73,7 +73,7 @@ D:   tcgen05.mma -> TMEM -> registers -> GMEM
 import tvm
 from tvm.script import tirx as T
 from tvm.script.tirx import tile as Tx
-from tvm.tirx.cuda.operator.tile_primitive.tma_utils import tma_shared_layout, SwizzleMode
+from tvm.backend.cuda.tile_primitive.tma_utils import mma_shared_layout, SwizzleMode
 from tvm.tirx.layout import TileLayout, S, TLane, TCol, tid_in_wg
 ```
 
@@ -89,8 +89,8 @@ def hgemm_v1(M, N, K):
     acc_type = tvm.DataType("float32")
 
     BLK_M, BLK_N, BLK_K = 128, 128, 64
-    A_layout = tma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
-    B_layout = tma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
+    A_layout = mma_shared_layout(a_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_M, BLK_K))
+    B_layout = mma_shared_layout(b_type, SwizzleMode.SWIZZLE_128B_ATOM, (BLK_N, BLK_K))
 
     @T.prim_func
     def kernel(
@@ -214,7 +214,7 @@ print("PASS")
 
 ```{raw} html
 <div style="overflow-x:auto;">
-<iframe src="../demo_zh/tirx_dispatch.html?v=intro-tirx-wheel-20260723" title="TIRx 中的 Scope、Layout 与 Dispatch" loading="lazy"
+<iframe src="../demo_zh/tirx_dispatch.html?v=intro-tirx-wheel-20260811" title="TIRx 中的 Scope、Layout 与 Dispatch" loading="lazy"
         style="width:100%; min-width:960px; height:900px; border:1px solid var(--pst-color-border, #d0d0d0); border-radius:6px;"></iframe>
 </div>
 ```

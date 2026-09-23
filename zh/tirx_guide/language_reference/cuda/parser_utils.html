@@ -51,6 +51,7 @@
     <script src="../../../_static/translations.js?v=beaddf03"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'tirx_guide/language_reference/cuda/parser_utils';</script>
     <script src="../../../_static/demo-embed-zh-20260627.js?v=3a4a2ec8"></script>
+    <script src="../../../_static/chinese-search.js?v=6dcb01bb"></script>
     <link rel="icon" href="../../../_static/mlc-favicon.ico"/>
     <link rel="index" title="索引" href="../../../genindex.html" />
     <link rel="search" title="搜索" href="../../../search.html" />
@@ -178,7 +179,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../chapter_flash_attention/index.html">Flash Attention 4</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">参考资料</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">附录</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../appendix/index.html">概览</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="../index.html">TIRx 语言参考</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
@@ -189,11 +190,14 @@
 <li class="toctree-l2"><a class="reference internal" href="threads_sync.html">CUDA C++/PTX Intrinsics</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../appendix/debugging_warp_specialized.html">调试 Warp-Specialized Kernel</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../appendix/benchmarking_gpu_kernels.html">GPU Kernel 性能测量与分析</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../arch/index.html">编译器内部机制</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../arch/lowering_pipeline.html">TIRx Lowering Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../arch/ir_representation.html">TIRx IR 的组织方式</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../arch/lowering_pipeline.html">TIRx 编译流水线</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../arch/tile_primitive_layout_lowering.html">Tile Primitive 与 Layout Lowering</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../appendix/debugging_warp_specialized.html">调试 Warp-Specialized Kernels</a></li>
 </ul>
 
     </div>
@@ -258,7 +262,7 @@
 
 
 
-<button onclick="window.location.href='../../../../index.html'"
+<button onclick="window.location.href='../../../../tirx_guide/language_reference/cuda/parser_utils.html'"
   class="btn btn-sm btn-language-switch-button pst-navbar-icon"
   title="Switch to English"
   data-bs-placement="bottom" data-bs-toggle="tooltip"
@@ -330,10 +334,11 @@ Python 计算得到的值直接写入 IR、提取可复用的代码片段，以�
 <h2><code class="docutils literal notranslate"><span class="pre">T.meta_var</span></code>：内联 Python 值<a class="headerlink" href="#t-meta-var-python" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">T.meta_var(x)</span></code> 告诉 parser，<code class="docutils literal notranslate"><span class="pre">x</span></code> 是由 <strong>Python</strong> 计算得到的编译期 meta
 value，应直接内联到 IR，而不是作为 script variable 解析。它既可以省去没有
-实际用途的临时变量，也可以用于 metaprogramming：使用 meta value 作为范围的
-普通 Python <code class="docutils literal notranslate"><span class="pre">for</span></code> 会在 parse time 展开。</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">n</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">meta_var</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>              <span class="c1"># n is a Python int, inlined</span>
-<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>            <span class="c1"># unrolled at parse time</span>
+实际用途的临时变量，也让 Python values 能够参数化生成的 IR。普通
+<code class="docutils literal notranslate"><span class="pre">range(n)</span></code> 仍会生成 serial TIRx loop；需要 lowering pipeline 展开时应使用
+<code class="docutils literal notranslate"><span class="pre">T.unroll(n)</span></code>。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">n</span> <span class="o">=</span> <span class="n">T</span><span class="o">.</span><span class="n">meta_var</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>              <span class="c1"># constant 4 is inlined as the extent</span>
+<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">T</span><span class="o">.</span><span class="n">unroll</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>          <span class="c1"># marked for the UnrollLoop lowering pass</span>
     <span class="n">acc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">acc</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">A</span><span class="p">[</span><span class="n">tx</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
 </pre></div>
 </div>
